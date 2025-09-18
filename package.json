@@ -52,7 +52,7 @@
     "input-otp": "1.4.1",
     "lodash-es": "latest",
     "lucide-react": "^0.454.0",
-    "next": "14.2.16",
+    "next": "14.2.32",
     "next-themes": "latest",
     "plaid": "latest",
     "react": "^18",
