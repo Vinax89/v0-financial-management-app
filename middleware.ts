@@ -2,10 +2,12 @@ import { type NextRequest, NextResponse } from "next/server"
 import { updateSession } from "@/lib/supabase/middleware"
 import { apiLimiter, authLimiter } from "@/lib/rate-limit"
 import { securityHeaders } from "@/lib/security-utils"
+import { randomUUID } from 'node:crypto'
 
 export async function middleware(request: NextRequest) {
   const { pathname: path } = request.nextUrl
   const ip = request.ip ?? "127.0.0.1"
+  const rid = request.headers.get('x-request-id') || randomUUID()
 
   // Rate limit API and auth routes
   const isAuth = path.startsWith("/api/auth") || path.startsWith("/api/plaid")
@@ -13,7 +15,7 @@ export async function middleware(request: NextRequest) {
   const { success, limit, remaining, reset } = await limiter.limit(ip)
 
   if (!success) {
-    return new NextResponse("Too Many Requests", {
+    const res = new NextResponse("Too Many Requests", {
       status: 429,
       headers: {
         "X-RateLimit-Limit": limit.toString(),
@@ -21,10 +23,13 @@ export async function middleware(request: NextRequest) {
         "X-RateLimit-Reset": reset.toString(),
       },
     })
+    res.headers.set('x-request-id', rid)
+    return res
   }
 
   // Maintain session
   const response = await updateSession(request)
+  response.headers.set('x-request-id', rid)
 
   // Apply security headers
   Object.entries(securityHeaders).forEach(([key, value]) => {
@@ -37,14 +42,18 @@ export async function middleware(request: NextRequest) {
 
   if (suspiciousPatterns.some((pattern) => pattern.test(userAgent))) {
     console.log(`[Security] Blocked suspicious request from ${ip}: ${userAgent}`)
-    return new NextResponse("Forbidden", { status: 403 })
+    const res = new NextResponse("Forbidden", { status: 403 })
+    res.headers.set('x-request-id', rid)
+    return res
   }
 
   // Validate request size
   const contentLength = request.headers.get("content-length")
   if (contentLength && Number.parseInt(contentLength) > 1024 * 1024) {
     // 1MB limit
-    return new NextResponse("Request Too Large", { status: 413 })
+    const res = new NextResponse("Request Too Large", { status: 413 })
+    res.headers.set('x-request-id', rid)
+    return res
   }
 
   return response
