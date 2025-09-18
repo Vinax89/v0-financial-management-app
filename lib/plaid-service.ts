@@ -1,5 +1,6 @@
 import { plaidClient, mapPlaidCategoryToLocal, mapPersonalFinanceCategory } from "./plaid-client"
 import { getSupabaseServerClient } from "./supabase/server"
+import { encryptToString, decryptFromString } from "@/lib/crypto/encryption"
 import type {
   LinkTokenCreateRequest,
   ItemPublicTokenExchangeRequest,
@@ -51,6 +52,8 @@ export class PlaidService {
       const itemResponse = await plaidClient.itemGet(itemRequest)
       const institution = itemResponse.data.institution
 
+      const encrypted_access_token = encryptToString(access_token)
+
       // Store the item in database
       const { data: plaidItem, error } = await (await this.supabase())
         .from("plaid_items")
@@ -58,7 +61,7 @@ export class PlaidService {
           {
             user_id: userId,
             item_id,
-            access_token,
+            access_token: encrypted_access_token,
             institution_id: institution?.institution_id,
             institution_name: institution?.name,
             status: "active",
@@ -403,7 +406,7 @@ export class PlaidService {
   }
 
   // Remove Plaid item (disconnect bank)
-  async removeItem(itemId: string, userId:.string): Promise<void> {
+  async removeItem(itemId: string, userId: string): Promise<void> {
     try {
       // Get access token
       const { data: plaidItem } = await (await this.supabase())
@@ -415,9 +418,11 @@ export class PlaidService {
 
       if (!plaidItem) throw new Error("Item not found")
 
+      const accessToken = decryptFromString(plaidItem.access_token)
+
       // Remove from Plaid
       const request: ItemRemoveRequest = {
-        access_token: plaidItem.access_token,
+        access_token: accessToken,
       }
 
       await plaidClient.itemRemove(request)
@@ -487,16 +492,18 @@ export class PlaidService {
 
     if (!plaidItem) return
 
+    const accessToken = decryptFromString(plaidItem.access_token)
+
     switch (webhookCode) {
       case "SYNC_UPDATES_AVAILABLE":
       case "DEFAULT_UPDATE":
       case "INITIAL_UPDATE":
         // Sync transactions
-        await this.syncTransactions(plaidItem.access_token, plaidItem.id)
+        await this.syncTransactions(accessToken, plaidItem.id)
         break
       case "HISTORICAL_UPDATE":
         // Full historical sync
-        await this.fullTransactionSync(plaidItem.access_token, plaidItem.id)
+        await this.fullTransactionSync(accessToken, plaidItem.id)
         break
       default:
         console.log(`Unhandled transaction webhook code: ${webhookCode}`)
@@ -547,10 +554,12 @@ export class PlaidService {
 
     if (!plaidItem) return
 
+    const accessToken = decryptFromString(plaidItem.access_token)
+
     switch (webhookCode) {
       case "DEFAULT_UPDATE":
         // Sync accounts
-        await this.syncAccounts(plaidItem.access_token, plaidItem.id)
+        await this.syncAccounts(accessToken, plaidItem.id)
         break
       default:
         console.log(`Unhandled accounts webhook code: ${webhookCode}`)

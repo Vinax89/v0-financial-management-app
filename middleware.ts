@@ -1,25 +1,42 @@
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { updateSession } from "@/lib/supabase/middleware"
-import { csp } from "@/lib/csp"
+import { apiLimiter, authLimiter } from "@/lib/rate-limit"
+import { securityHeaders } from "@/lib/security-utils"
 
 export async function middleware(request: NextRequest) {
-  const authResponse = await updateSession(request)
+  const { pathname: path } = request.nextUrl
+  const ip = request.ip ?? "127.0.0.1"
 
-  // Apply security headers to the auth response
-  authResponse.headers.set("Content-Security-Policy", csp)
-  authResponse.headers.set("X-Frame-Options", "DENY")
-  authResponse.headers.set("X-Content-Type-Options", "nosniff")
-  authResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin")
-  authResponse.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+  // Rate limit API and auth routes
+  const isAuth = path.startsWith("/api/auth") || path.startsWith("/api/plaid")
+  const limiter = isAuth ? authLimiter : apiLimiter
+  const { success, limit, remaining, reset } = await limiter.limit(ip)
 
+  if (!success) {
+    return new NextResponse("Too Many Requests", {
+      status: 429,
+      headers: {
+        "X-RateLimit-Limit": limit.toString(),
+        "X-RateLimit-Remaining": remaining.toString(),
+        "X-RateLimit-Reset": reset.toString(),
+      },
+    })
+  }
+
+  // Maintain session
+  const response = await updateSession(request)
+
+  // Apply security headers
+  Object.entries(securityHeaders).forEach(([key, value]) => {
+    response.headers.set(key, value)
+  })
 
   // Block suspicious requests
   const userAgent = request.headers.get("user-agent") || ""
   const suspiciousPatterns = [/bot/i, /crawler/i, /spider/i, /scraper/i, /hack/i, /exploit/i]
 
   if (suspiciousPatterns.some((pattern) => pattern.test(userAgent))) {
-    console.log(`[Security] Blocked suspicious request from ${request.ip}: ${userAgent}`)
+    console.log(`[Security] Blocked suspicious request from ${ip}: ${userAgent}`)
     return new NextResponse("Forbidden", { status: 403 })
   }
 
@@ -30,7 +47,7 @@ export async function middleware(request: NextRequest) {
     return new NextResponse("Request Too Large", { status: 413 })
   }
 
-  return authResponse
+  return response
 }
 
 export const config = {
