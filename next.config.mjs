@@ -1,11 +1,8 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+// next.config.mjs
+const isCI = process.env.CI === 'true'
+export default {
+  eslint: { ignoreDuringBuilds: !isCI ? true : false },
+  typescript: { ignoreBuildErrors: !isCI ? true : false },
   images: {
     unoptimized: true,
   },
@@ -27,18 +24,18 @@ const nextConfig = {
         chunks: 'all',
         cacheGroups: {
           vendor: {
-            test: /[\\/]node_modules[\\/]/,
+            test: /[/\\]node_modules[/\\]/,
             name: 'vendors',
             chunks: 'all',
           },
           ui: {
-            test: /[\\/]node_modules[\\/]@radix-ui[\\/]/,
+            test: /[/\\]node_modules[/\\]@radix-ui[/\\]/,
             name: 'ui-components',
             chunks: 'all',
             priority: 10,
           },
           charts: {
-            test: /[\\/]node_modules[\\/]recharts[\\/]/,
+            test: /[/\\]node_modules[/\\]recharts[/\\]/,
             name: 'charts',
             chunks: 'all',
             priority: 10,
@@ -62,5 +59,3 @@ const nextConfig = {
   poweredByHeader: false,
   compress: true,
 }
-
-export default nextConfig
