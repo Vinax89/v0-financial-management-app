@@ -1,0 +1,15 @@
+name: cron-categorize
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # every 30 minutes
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Categorize
+        run: |
+          curl -sS -X POST "$ENDPOINT" -H "x-cron-secret: $CRON_SECRET" | jq .
+        env:
+          ENDPOINT: ${{ secrets.CATEGORIZE_ENDPOINT }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
