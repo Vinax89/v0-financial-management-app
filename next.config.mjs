@@ -1,8 +1,8 @@
 // next.config.mjs
 const isCI = process.env.CI === 'true'
 export default {
-  eslint: { ignoreDuringBuilds: !isCI ? true : false },
-  typescript: { ignoreBuildErrors: !isCI ? true : false },
+  eslint: { ignoreDuringBuilds: !isCI },
+  typescript: { ignoreBuildErrors: !isCI },
   images: {
     unoptimized: true,
   },
