@@ -403,7 +403,7 @@ export class PlaidService {
   }
 
   // Remove Plaid item (disconnect bank)
-  async removeItem(itemId: string, userId: string): Promise<void> {
+  async removeItem(itemId: string, userId:.string): Promise<void> {
     try {
       // Get access token
       const { data: plaidItem } = await (await this.supabase())

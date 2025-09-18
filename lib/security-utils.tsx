@@ -80,20 +80,22 @@ export const rateLimiter = new RateLimiter()
 export const securityHeaders = {
   "Content-Security-Policy": [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live",
+    "script-src 'self' https://cdn.plaid.com",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self' data:",
-    "connect-src 'self' https://vercel.live wss://ws-us3.pusher.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.plaid.com",
+    "frame-src 'self' https://cdn.plaid.com https://*.plaid.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    "form-action 'self'"
   ].join("; "),
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 }
+
 
 // Secure session management
 export function generateSecureToken(): string {

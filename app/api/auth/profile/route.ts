@@ -2,6 +2,15 @@
 import { NextResponse } from "next/server"
 import { getSupabaseServerClient } from "@/lib/supabase/server"
 
+export async function GET(_request: Request) {
+  const supabase = await getSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const { data: profile, error } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
+  if (error) return NextResponse.json({ error: "Failed to fetch profile" }, { status: 500 })
+  return NextResponse.json({ profile })
+}
+
 export async function PATCH(req: Request) {
   const supabase = await getSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
