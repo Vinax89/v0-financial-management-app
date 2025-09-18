@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -52,21 +52,37 @@ export default function DashboardPage() {
   const [selectedAccount, setSelectedAccount] = useState("all")
   const [activeView, setActiveView] = useState("overview")
 
-  // Mock data - in real app this would come from database
-  const dashboardData: DashboardData = {
-    netWorth: 45750,
-    netWorthChange: 2340,
-    totalIncome: 4800,
-    totalExpenses: 3650,
-    cashFlow: 1150,
-    savingsRate: 24,
-    budgetUtilization: 76,
-    creditUtilization: 23,
-  }
+  const dashboardData: DashboardData = useMemo(
+    () => ({
+      netWorth: 45750,
+      netWorthChange: 2340,
+      totalIncome: 4800,
+      totalExpenses: 3650,
+      cashFlow: 1150,
+      savingsRate: 24,
+      budgetUtilization: 76,
+      creditUtilization: 23,
+    }),
+    [],
+  )
 
-  const getChangeColor = (value: number) => (value >= 0 ? "text-green-600" : "text-red-600")
-  const getChangeIcon = (value: number) =>
-    value >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />
+  const getChangeColor = useCallback((value: number) => (value >= 0 ? "text-green-600" : "text-red-600"), [])
+  const getChangeIcon = useCallback(
+    (value: number) => (value >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />),
+    [],
+  )
+
+  const handleTimeRangeChange = useCallback((value: string) => {
+    setTimeRange(value)
+  }, [])
+
+  const handleAccountChange = useCallback((value: string) => {
+    setSelectedAccount(value)
+  }, [])
+
+  const handleActiveViewChange = useCallback((value: string) => {
+    setActiveView(value)
+  }, [])
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
@@ -80,7 +96,7 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Select value={timeRange} onValueChange={setTimeRange}>
+            <Select value={timeRange} onValueChange={handleTimeRangeChange}>
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
@@ -91,7 +107,7 @@ export default function DashboardPage() {
                 <SelectItem value="365">Last year</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+            <Select value={selectedAccount} onValueChange={handleAccountChange}>
               <SelectTrigger className="w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -239,7 +255,7 @@ export default function DashboardPage() {
         <AIFinancialInsights />
 
         {/* Main Charts and Features */}
-        <Tabs value={activeView} onValueChange={setActiveView} className="space-y-4">
+        <Tabs value={activeView} onValueChange={handleActiveViewChange} className="space-y-4">
           <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="spending">Spending</TabsTrigger>

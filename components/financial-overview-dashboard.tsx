@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
@@ -42,9 +42,8 @@ export function FinancialOverviewDashboard() {
   const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([])
   const [timeframe, setTimeframe] = useState<"week" | "month">("week")
 
-  useEffect(() => {
-    // Mock data - in real app, calculate from Supabase data
-    setSummary({
+  const generateMockData = useCallback(() => {
+    const mockSummary = {
       totalIncome: 5200,
       totalExpenses: 3850,
       netCashFlow: 1350,
@@ -52,54 +51,62 @@ export function FinancialOverviewDashboard() {
       overdueItems: 1,
       workHoursScheduled: 40,
       budgetUtilization: 78,
-    })
+    }
 
-    setUpcomingEvents([
+    const mockEvents = [
       {
         id: "1",
         title: "Rent Payment",
         date: addDays(new Date(), 2),
         amount: 1200,
-        type: "bill",
-        status: "scheduled",
-        priority: "high",
+        type: "bill" as const,
+        status: "scheduled" as const,
+        priority: "high" as const,
       },
       {
         id: "2",
         title: "Salary Deposit",
         date: addDays(new Date(), 5),
         amount: 2500,
-        type: "income",
-        status: "scheduled",
-        priority: "medium",
+        type: "income" as const,
+        status: "scheduled" as const,
+        priority: "medium" as const,
       },
       {
         id: "3",
         title: "Electric Bill",
         date: addDays(new Date(), -1),
         amount: 85,
-        type: "bill",
-        status: "overdue",
-        priority: "urgent",
+        type: "bill" as const,
+        status: "overdue" as const,
+        priority: "urgent" as const,
       },
       {
         id: "4",
         title: "Work Shift",
         date: addDays(new Date(), 1),
-        type: "work",
-        status: "scheduled",
-        priority: "medium",
+        type: "work" as const,
+        status: "scheduled" as const,
+        priority: "medium" as const,
       },
-    ])
-  }, [timeframe])
+    ]
 
-  const getStatusColor = (status: string, priority: string) => {
+    return { mockSummary, mockEvents }
+  }, [])
+
+  useEffect(() => {
+    const { mockSummary, mockEvents } = generateMockData()
+    setSummary(mockSummary)
+    setUpcomingEvents(mockEvents)
+  }, [timeframe, generateMockData])
+
+  const getStatusColor = useCallback((status: string, priority: string) => {
     if (status === "overdue") return "destructive"
     if (priority === "urgent" || priority === "high") return "destructive"
     return "secondary"
-  }
+  }, [])
 
-  const getTypeIcon = (type: string) => {
+  const getTypeIcon = useCallback((type: string) => {
     switch (type) {
       case "bill":
         return <AlertTriangle className="h-4 w-4" />
@@ -110,7 +117,11 @@ export function FinancialOverviewDashboard() {
       default:
         return <Calendar className="h-4 w-4" />
     }
-  }
+  }, [])
+
+  const handleTimeframeChange = useCallback((value: string) => {
+    setTimeframe(value as "week" | "month")
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -184,7 +195,7 @@ export function FinancialOverviewDashboard() {
               <CardTitle>Upcoming Events</CardTitle>
               <CardDescription>Bills, income, and work schedule for the next {timeframe}</CardDescription>
             </div>
-            <Tabs value={timeframe} onValueChange={(value) => setTimeframe(value as "week" | "month")}>
+            <Tabs value={timeframe} onValueChange={handleTimeframeChange}>
               <TabsList>
                 <TabsTrigger value="week">Week</TabsTrigger>
                 <TabsTrigger value="month">Month</TabsTrigger>

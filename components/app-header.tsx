@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { usePathname } from "next/navigation"
-import { motion } from "framer-motion"
 import { Bell, Search, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,20 +31,15 @@ const pageTitles: Record<string, string> = {
   "/settings": "Settings",
 }
 
-export function AppHeader() {
+export const AppHeader = React.memo(function AppHeader() {
   const pathname = usePathname()
   const { toggleSidebar } = useSidebar()
   const [searchQuery, setSearchQuery] = React.useState("")
 
-  const currentTitle = pageTitles[pathname] || "ShiftBudget"
+  const currentTitle = React.useMemo(() => pageTitles[pathname] || "ShiftBudget", [pathname])
 
   return (
-    <motion.header
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
-    >
+    <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" className="md:hidden" onClick={toggleSidebar}>
@@ -53,14 +47,9 @@ export function AppHeader() {
             <span className="sr-only">Toggle sidebar</span>
           </Button>
 
-          <motion.div
-            key={pathname}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3 }}
-          >
+          <div>
             <h1 className="text-xl font-semibold text-foreground">{currentTitle}</h1>
-          </motion.div>
+          </div>
         </div>
 
         <div className="flex items-center gap-4">
@@ -113,6 +102,6 @@ export function AppHeader() {
           </DropdownMenu>
         </div>
       </div>
-    </motion.header>
+    </header>
   )
-}
+})

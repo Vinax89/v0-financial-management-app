@@ -4,12 +4,15 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Shield, AlertTriangle, CheckCircle, Eye, Download } from "lucide-react"
+import { Shield, AlertTriangle, CheckCircle, Download, X } from "lucide-react"
 import { SecurityAudit } from "@/lib/security-utils"
 
-export function SecurityDashboard() {
+interface SecurityDashboardProps {
+  onClose?: () => void
+}
+
+export function SecurityDashboard({ onClose }: SecurityDashboardProps) {
   const [logs, setLogs] = useState<any[]>([])
-  const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {
     const updateLogs = () => {
@@ -17,7 +20,7 @@ export function SecurityDashboard() {
     }
 
     updateLogs()
-    const interval = setInterval(updateLogs, 5000) // Update every 5 seconds
+    const interval = setInterval(updateLogs, 30000)
 
     return () => clearInterval(interval)
   }, [])
@@ -38,15 +41,6 @@ export function SecurityDashboard() {
     linkElement.click()
   }
 
-  if (!isVisible) {
-    return (
-      <Button variant="outline" size="sm" onClick={() => setIsVisible(true)} className="fixed bottom-4 right-4 z-50">
-        <Shield className="w-4 h-4 mr-2" />
-        Security Monitor
-      </Button>
-    )
-  }
-
   return (
     <div className="fixed bottom-4 right-4 z-50 w-96 max-h-96 overflow-hidden">
       <Card className="shadow-2xl border-2">
@@ -60,9 +54,11 @@ export function SecurityDashboard() {
               <Button variant="ghost" size="sm" onClick={exportLogs}>
                 <Download className="w-3 h-3" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setIsVisible(false)}>
-                <Eye className="w-3 h-3" />
-              </Button>
+              {onClose && (
+                <Button variant="ghost" size="sm" onClick={onClose}>
+                  <X className="w-3 h-3" />
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
