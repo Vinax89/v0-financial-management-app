@@ -12,6 +12,7 @@ import { PageTransition } from "@/components/page-transition"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/components/auth-provider"
 import { Toaster } from "@/components/ui/toaster"
+import ToastProvider from '@/components/toast/ToastProvider'
 
 const inter = Inter({
   subsets: ["latin"],
@@ -39,24 +40,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${nunitoSans.variable}`} suppressHydrationWarning>
-      <body className={`font-sans ${inter.variable} ${nunitoSans.variable} antialiased`}>
-        <ThemeProvider>
-          <AuthProvider>
-            <Suspense fallback={null}>
-              <SidebarProvider>
-                <AppSidebar />
-                <SidebarInset>
-                  <AppHeader />
-                  <PageTransition>
-                    <main className="flex-1 space-y-4 p-4 md:p-6 lg:p-8">{children}</main>
-                  </PageTransition>
-                </SidebarInset>
-              </SidebarProvider>
-              <Analytics />
-              <Toaster />
-            </Suspense>
-          </AuthProvider>
-        </ThemeProvider>
+      <body>
+        <ToastProvider>
+          {children}
+        </ToastProvider>
       </body>
     </html>
   )
