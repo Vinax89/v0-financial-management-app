@@ -70,11 +70,13 @@ export class DatabaseOptimizer {
     return this.cachedQuery(cacheKey, async () => {
       const { data, error } = await this.supabase
         .from("transactions")
-        .select(`
+        .select(
+          `
           *,
           categories(name, icon, color),
           accounts(name, type)
-        `)
+        `,
+        )
         .eq("account_id", accountId)
         .gte("transaction_date", startDate)
         .lte("transaction_date", endDate)
@@ -114,8 +116,8 @@ export class DatabaseOptimizer {
 
         return { balances, monthlyData }
       },
-      2 * 60 * 1000,
-    ) // 2 minute cache for dashboard
+      2 * 60 * 1000, // 2 minute cache for dashboard
+    )
   }
 
   // Optimized budget performance queries
@@ -127,10 +129,12 @@ export class DatabaseOptimizer {
     return this.cachedQuery(cacheKey, async () => {
       const { data, error } = await this.supabase
         .from("budget_performance")
-        .select(`
+        .select(
+          `
           *,
           categories(name, icon, color)
-        `)
+        `,
+        )
         .order("utilization_percentage", { ascending: false })
 
       if (error) throw error
@@ -147,11 +151,13 @@ export class DatabaseOptimizer {
     return this.cachedQuery(cacheKey, async () => {
       let queryBuilder = this.supabase
         .from("transactions")
-        .select(`
+        .select(
+          `
           *,
           categories(name, icon, color),
           accounts(name, type)
-        `)
+        `,
+        )
         .or(`description.ilike.%${query}%, notes.ilike.%${query}%`)
         .eq("status", "completed")
 
@@ -252,7 +258,24 @@ export class DatabaseOptimizer {
       hitRate: total > 0 ? (((total - expired) / total) * 100).toFixed(2) : "0.00",
     }
   }
+
+  async getPerfStats() {
+    if (!this.supabase) await this.initialize()
+    const { data, error } = await this.supabase.rpc("get_perf_stats")
+    if (error) throw error
+    return data
+  }
+
+  async getDbHints() {
+    if (!this.supabase) await this.initialize()
+    const { data, error } = await this.supabase.rpc("get_db_hints")
+    if (error) throw error
+    return data
+  }
 }
 
 // Singleton instance
 export const dbOptimizer = new DatabaseOptimizer()
+
+export const getPerfStats = () => dbOptimizer.getPerfStats()
+export const getDbHints = () => dbOptimizer.getDbHints()
