@@ -1,13 +1,19 @@
-// app/api/plaid/create-link-token/route.ts
-import { NextResponse } from "next/server"
-import { getSupabaseServerClient } from "@/lib/supabase/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { plaidService } from "@/lib/plaid-service"
 
-export async function POST() {
-  const supabase = await getSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+export async function POST(request: NextRequest) {
+  try {
+    const { userId } = await request.json()
 
-  const linkToken = await plaidService.createLinkToken(user.id)
-  return NextResponse.json({ linkToken })
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+    }
+
+    const linkToken = await plaidService.createLinkToken(userId)
+
+    return NextResponse.json({ linkToken })
+  } catch (error) {
+    console.error("Create link token error:", error)
+    return NextResponse.json({ error: "Failed to create link token" }, { status: 500 })
+  }
 }

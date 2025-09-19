@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/v1/transactions/sync/all?full_sync=true",
-      "schedule": "0 0 * * 0"
-    }
-  ]
-}
