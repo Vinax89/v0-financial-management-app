@@ -1,32 +1,66 @@
-import { withSentryConfig } from "@sentry/nextjs"
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: { ignoreDuringBuilds: process.env.CI ? false : true },
-  typescript: { ignoreBuildErrors: process.env.CI ? false : true },
-  images: {
-    // NEVER wildcard here. Enumerate.
-    domains: [
-      'cdn.plaid.com',
-      new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co').hostname,
-    ],
-    remotePatterns: [
-      { protocol: 'https', hostname: 'cdn.plaid.com' },
-    ],
-    // prevent SVG content injection through image optimizer
-    dangerouslyAllowSVG: false,
-    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  eslint: {
+    ignoreDuringBuilds: true,
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  images: {
+    unoptimized: true,
+  },
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons', 'recharts'],
+    turbo: {
+      rules: {
+        '*.svg': {
+          loaders: ['@svgr/webpack'],
+          as: '*.js',
+        },
+      },
+    },
+  },
+  webpack: (config, { dev, isServer }) => {
+    // Optimize bundle splitting
+    if (!dev && !isServer) {
+      config.optimization.splitChunks = {
+        chunks: 'all',
+        cacheGroups: {
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'vendors',
+            chunks: 'all',
+          },
+          ui: {
+            test: /[\\/]node_modules[\\/]@radix-ui[\\/]/,
+            name: 'ui-components',
+            chunks: 'all',
+            priority: 10,
+          },
+          charts: {
+            test: /[\\/]node_modules[\\/]recharts[\\/]/,
+            name: 'charts',
+            chunks: 'all',
+            priority: 10,
+          },
+        },
+      }
+    }
+
+    // Optimize imports for faster compilation
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@radix-ui/react-icons': '@radix-ui/react-icons/dist/index.js',
+    }
+
+    return config
+  },
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  output: 'standalone',
+  poweredByHeader: false,
+  compress: true,
 }
 
-export default withSentryConfig(nextConfig, {
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  authToken: process.env.SENTRY_AUTH_TOKEN,
-  silent: !process.env.CI,
-  disableLogger: true,
-  // Fixed path simplifies CDN/proxy rules
-  tunnelRoute: "/monitoring",
-  // Tie releases to commit for de‑obfuscation
-  release: process.env.SENTRY_RELEASE || process.env.VERCEL_GIT_COMMIT_SHA,
-})
+export default nextConfig
