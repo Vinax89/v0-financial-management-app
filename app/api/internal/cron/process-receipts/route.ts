@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       const base64 = buf.toString('base64')
       const receiptData = await processReceiptWithAI(base64, r.mime_type)
 
-      // Optional thumbnail for images
+      // Thumbnail (images locally, PDFs via external service)
       let thumbPath: string | null = null
       if (r.mime_type.startsWith('image/')) {
         const image = sharp(buf).rotate().resize({ width: 640, withoutEnlargement: true }).jpeg({ quality: 70 })
@@ -53,6 +53,21 @@ export async function POST(req: Request) {
         const { error: upErr } = await admin.storage.from('receipts').upload(name, out, { contentType: 'image/jpeg', upsert: true })
         if (upErr) throw upErr
         thumbPath = name
+      } else if (r.mime_type === 'application/pdf') {
+        const endpoint = process.env.PDF_THUMBNAIL_ENDPOINT
+        const secret = process.env.PDF_THUMBNAIL_SECRET || ''
+        if (endpoint && secret) {
+          const payload = JSON.stringify({ url: signed.signedUrl, width: 640 })
+          const sig = await import('node:crypto').then(({ createHmac }) => createHmac('sha256', secret).update(payload).digest('hex'))
+          const resp = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', 'x-signature': sig }, body: payload })
+          if (!resp.ok) throw new Error('thumbnail service failed')
+          const { jpegBase64 } = await resp.json() as { jpegBase64: string }
+          const out = Buffer.from(jpegBase64, 'base64')
+          const name = r.file_path.replace(/\/([^/]+)$/,'/thumb_$1').replace(/\.[a-zA-Z0-9]+$/, '.jpg')
+          const { error: upErr } = await admin.storage.from('receipts').upload(name, out, { contentType: 'image/jpeg', upsert: true })
+          if (upErr) throw upErr
+          thumbPath = name
+        }
       }
 
       // Persist results

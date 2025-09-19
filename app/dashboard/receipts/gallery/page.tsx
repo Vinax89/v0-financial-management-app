@@ -27,7 +27,7 @@ export default async function ReceiptsGalleryPage({ searchParams }: { searchPara
         <h1 className="text-2xl font-semibold">Receipts</h1>
         <div className="text-sm opacity-70">Total: {count ?? rows?.length ?? 0}</div>
       </div>
-      <ReceiptGallery initialRows={rows || []} page={page} size={size} total={count||0} />
+      <ReceiptGallery userId={user.id} initialRows={rows || []} page={page} size={size} total={count||0} />
     </div>
   )
 }
