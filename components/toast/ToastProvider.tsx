@@ -1,5 +1,6 @@
 'use client'
 import * as React from 'react'
+import './theme.css'
 
 type Toast = { id: number; title: string; kind?: 'success'|'error'|'info' }
 
@@ -26,7 +27,14 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
       {children}
       <div aria-live="polite" className="fixed bottom-4 right-4 space-y-2 z-50">
         {toasts.map(t => (
-          <div key={t.id} className={`px-3 py-2 rounded shadow border text-sm bg-white ${t.kind==='success'?'border-emerald-300':t.kind==='error'?'border-red-300':'border-gray-300'}`}>
+          <div key={t.id} className="px-3 py-2 rounded shadow border text-sm" style={{
+            background: 'var(--toast-bg)', color: 'var(--toast-fg)', borderColor: 'var(--toast-border)'
+          }}>
+            <span style={{
+              display: 'inline-block', width: 8, height: 8, borderRadius: 9999,
+              background: t.kind==='success'?'var(--toast-success)': t.kind==='error'?'var(--toast-error)':'var(--toast-info)',
+              marginRight: 8
+            }} />
             {t.title}
           </div>
         ))}
