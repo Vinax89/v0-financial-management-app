@@ -4,6 +4,19 @@ import { withSentryConfig } from "@sentry/nextjs"
 const nextConfig = {
   eslint: { ignoreDuringBuilds: process.env.CI ? false : true },
   typescript: { ignoreBuildErrors: process.env.CI ? false : true },
+  images: {
+    // NEVER wildcard here. Enumerate.
+    domains: [
+      'cdn.plaid.com',
+      new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co').hostname,
+    ],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'cdn.plaid.com' },
+    ],
+    // prevent SVG content injection through image optimizer
+    dangerouslyAllowSVG: false,
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
 }
 
 export default withSentryConfig(nextConfig, {
