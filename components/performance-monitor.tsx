@@ -29,7 +29,7 @@ interface PerformanceMetrics {
   }
 }
 
-export function PerformanceMonitor() {
+const PerformanceMonitor = () => {
   const [metrics, setMetrics] = useState<PerformanceMetrics>({
     cacheStats: { total: 0, active: 0, expired: 0, hitRate: "0.00" },
     queryPerformance: [],
@@ -294,3 +294,5 @@ export function PerformanceMonitor() {
     </div>
   )
 }
+
+export { PerformanceMonitor }
