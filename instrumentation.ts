@@ -1,11 +1,13 @@
-export async function register() {
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
-    await import('./sentry.server.config')
-  } else if (process.env.NEXT_RUNTIME === 'edge') {
-    await import('./sentry.edge.config')
-  }
-}
+import * as Sentry from '@sentry/nextjs'
 
-// Optional for Next 14 App Router distributed tracing in metadata
-// import * as Sentry from '@sentry/nextjs'
-// export function generateMetadata() { return { other: { ...Sentry.getTraceData() } } }
+let inited = false
+export function register() {
+  if (inited) return
+  inited = true
+  // Avoid initializing on the Edge unless you intend to
+  if (process.env.NEXT_RUNTIME === 'edge') return
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN,
+    tracesSampleRate: 0.1,
+  })
+}
