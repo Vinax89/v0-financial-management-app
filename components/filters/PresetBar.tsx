@@ -35,6 +35,13 @@ export default function PresetBar({ scope, currentParams }: { scope: string; cur
     startTransition(loadPresets)
   }
 
+  async function sharePreset(presetId: string) {
+    const res = await fetch(`/api/presets/share`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ presetId }) })
+    if (!res.ok) return alert('Failed to create share link')
+    const { shareUrl } = await res.json()
+    prompt('Share this link:', shareUrl)
+  }
+
   useEffect(() => { startTransition(loadPresets) }, [scope])
 
   return (
@@ -46,6 +53,7 @@ export default function PresetBar({ scope, currentParams }: { scope: string; cur
         {presets?.map(p => (
           <div key={p.id} className="flex items-center gap-1 border rounded px-2 py-1 bg-gray-50">
             <button onClick={() => applyPreset(p)}>{p.name}</button>
+            <button onClick={() => sharePreset(p.id)} className="text-blue-500">Share</button>
             <button onClick={() => deletePreset(p.id)} className="text-red-500">x</button>
           </div>
         ))}
