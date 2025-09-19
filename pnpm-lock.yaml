@@ -17,6 +17,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.892.0
         version: 3.892.0
+      '@aws-sdk/lib-storage':
+        specifier: ^3.892.0
+        version: 3.892.0(@aws-sdk/client-s3@3.892.0)
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.892.0
         version: 3.892.0
@@ -328,6 +331,12 @@ packages:
   '@aws-sdk/credential-provider-web-identity@3.891.0':
     resolution: {integrity: sha512-yq7kzm1sHZ0GZrtS+qpjMUp4ES66UoT1+H2xxrOuAZkvUnkpQq1iSjOgBgJJ9FW1EsDUEmlgn94i4hJTNvm7fg==}
     engines: {node: '>=18.0.0'}
+
+  '@aws-sdk/lib-storage@3.892.0':
+    resolution: {integrity: sha512-fVckpCJ/Pnm9xrGepruS1P5rP65NRy7UhVbeD+Nssjn7K59GE3MJIo5y+2Oee3QoXBV71Xu68uPkk6ccS4FWvA==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      '@aws-sdk/client-s3': ^3.892.0
 
   '@aws-sdk/middleware-bucket-endpoint@3.890.0':
     resolution: {integrity: sha512-X/td72r18uLsB1Hv70uK9cFzvc5Xyd8fde1FR7aU9COzw2ncNFgG2TJkxHBjdkby/T6SL5R4kY49KjVT3KHnzA==}
@@ -2730,6 +2739,9 @@ packages:
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
+  base64-js@1.5.1:
+    resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
+
   baseline-browser-mapping@2.8.5:
     resolution: {integrity: sha512-TiU4qUT9jdCuh4aVOG7H1QozyeI2sZRqoRPdqBIaslfNt4WUSanRBueAwl2x5jt4rXBMim3lIN2x6yT8PDi24Q==}
     hasBin: true
@@ -2755,6 +2767,9 @@ packages:
 
   buffer-from@1.1.2:
     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
+
+  buffer@5.6.0:
+    resolution: {integrity: sha512-/gDYp/UtU0eA1ys8bOs9J6a+E/KWIY+DZ+Q2WESNUA0jFRsJOc0SNUO6xJ5SGA1xueg3NL65W6s+NY5l9cunuw==}
 
   bufferutil@4.0.9:
     resolution: {integrity: sha512-WDtdLmJvAuNNPzByAYpRo2rF1Mmradw6gvWsQKf63476DDXmomT9zUiGypLcG4ibIM67vhAj8jJRdbmEws2Aqw==}
@@ -3241,11 +3256,17 @@ packages:
     resolution: {integrity: sha512-dFcAjpTQFgoLMzC2VwU+C/CbS7uRL0lWmxDITmqm7C+7F0Odmj6s9l6alZc6AELXhrnggM2CeWSXHGOdX2YtwA==}
     engines: {node: '>= 6'}
 
+  ieee754@1.2.1:
+    resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
+
   immer@10.1.3:
     resolution: {integrity: sha512-tmjF/k8QDKydUlm3mZU+tjM6zeq9/fFpPqH9SzWmBnVVKsPBg/V66qsMwb3/Bo90cgUN+ghdVBess+hPsxUyRw==}
 
   import-in-the-middle@1.14.2:
     resolution: {integrity: sha512-5tCuY9BV8ujfOpwtAGgsTx9CGUapcFMEEyByLv1B+v2+6DhAcw+Zr0nhQT7uwaZ7DiourxFEscghOR8e1aPLQw==}
+
+  inherits@2.0.4:
+    resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
 
   input-otp@1.4.1:
     resolution: {integrity: sha512-+yvpmKYKHi9jIGngxagY9oWiiblPB7+nEO75F2l2o4vs+6vpPZZmUl4tBNYuTCvQjhvEIbdNeJu70bhfYP2nbw==}
@@ -3735,6 +3756,10 @@ packages:
     resolution: {integrity: sha512-x+VL6wbT4JRVPm7EGxXhZ8w8LTROaxPXOqhlGyVSrv0sB1jkyFGgXxJ8LVoPRLvPR6/CIZGFmfzqUa2NYeMr2A==}
     engines: {node: '>=0.10.0'}
 
+  readable-stream@3.6.2:
+    resolution: {integrity: sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA==}
+    engines: {node: '>= 6'}
+
   readdirp@3.6.0:
     resolution: {integrity: sha512-hOS089on8RduqdbhvQ5Z37A0ESjsqz6qnRcffsMU3495FuTdqSm+7bhJ29JvIOsBDEEnan5DPu9t3To9VRlMzA==}
     engines: {node: '>=8.10.0'}
@@ -3824,9 +3849,15 @@ packages:
     resolution: {integrity: sha512-WjlahMgHmCJpqzU8bIBy4qtsZdU9lRlcZE3Lvyej6t4tuOuv1vk57OW3MBrj6hXBFx/nNoC9MPMTcr5YA7NQbg==}
     engines: {node: '>=6'}
 
+  stream-browserify@3.0.0:
+    resolution: {integrity: sha512-H73RAHsVBapbim0tU2JwwOiXUj+fikfiaoYAKHF3VJfA0pe2BCzkhAHBlLG6REzE+2WNZcxOXjK7lkso+9euLA==}
+
   streamsearch@1.1.0:
     resolution: {integrity: sha512-Mcc5wHehp9aXz1ax6bZUyY5afg9u2rv5cqQI3mRrYkGC8rW2hM02jWuwjtL++LS5qinSyhj2QfLyNsuc+VsExg==}
     engines: {node: '>=10.0.0'}
+
+  string_decoder@1.3.0:
+    resolution: {integrity: sha512-hkRX8U1WjJFd8LsDJ2yQ/wWWxaopEsABU1XfkM8A+j0+85JAGppt16cr1Whg6KIbb4okU6Mql6BOj+uup/wKeA==}
 
   strnum@2.1.1:
     resolution: {integrity: sha512-7ZvoFTiCnGxBtDqJ//Cu6fWtZtc7Y3x+QOirG15wztbdngGSkht27o2pyGWrVy0b4WAy3jbKmnoK6g5VlVNUUw==}
@@ -3968,6 +3999,9 @@ packages:
     resolution: {integrity: sha512-Rb46I4cGGVBmjamjphe8L/UnvJD+uPPtTkNvX5mZgqdbavhI4EbgIWJiIHXJ8bc/i9EQGPRh4DwEURJ552Do0A==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  util-deprecate@1.0.2:
+    resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
   uuid@9.0.1:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
@@ -4313,6 +4347,17 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - aws-crt
+
+  '@aws-sdk/lib-storage@3.892.0(@aws-sdk/client-s3@3.892.0)':
+    dependencies:
+      '@aws-sdk/client-s3': 3.892.0
+      '@smithy/abort-controller': 4.1.1
+      '@smithy/middleware-endpoint': 4.2.3
+      '@smithy/smithy-client': 4.6.3
+      buffer: 5.6.0
+      events: 3.3.0
+      stream-browserify: 3.0.0
+      tslib: 2.8.1
 
   '@aws-sdk/middleware-bucket-endpoint@3.890.0':
     dependencies:
@@ -7043,6 +7088,8 @@ snapshots:
 
   balanced-match@1.0.2: {}
 
+  base64-js@1.5.1: {}
+
   baseline-browser-mapping@2.8.5: {}
 
   binary-extensions@2.3.0: {}
@@ -7066,6 +7113,11 @@ snapshots:
       update-browserslist-db: 1.1.3(browserslist@4.26.2)
 
   buffer-from@1.1.2: {}
+
+  buffer@5.6.0:
+    dependencies:
+      base64-js: 1.5.1
+      ieee754: 1.2.1
 
   bufferutil@4.0.9:
     dependencies:
@@ -7448,6 +7500,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  ieee754@1.2.1: {}
+
   immer@10.1.3: {}
 
   import-in-the-middle@1.14.2:
@@ -7456,6 +7510,8 @@ snapshots:
       acorn-import-attributes: 1.9.5(acorn@8.15.0)
       cjs-module-lexer: 1.4.3
       module-details-from-path: 1.0.4
+
+  inherits@2.0.4: {}
 
   input-otp@1.4.1(react-dom@18.0.0(react@18.0.0))(react@18.0.0):
     dependencies:
@@ -7861,6 +7917,12 @@ snapshots:
     dependencies:
       loose-envify: 1.4.0
 
+  readable-stream@3.6.2:
+    dependencies:
+      inherits: 2.0.4
+      string_decoder: 1.3.0
+      util-deprecate: 1.0.2
+
   readdirp@3.6.0:
     dependencies:
       picomatch: 2.3.1
@@ -7979,7 +8041,16 @@ snapshots:
     dependencies:
       type-fest: 0.7.1
 
+  stream-browserify@3.0.0:
+    dependencies:
+      inherits: 2.0.4
+      readable-stream: 3.6.2
+
   streamsearch@1.1.0: {}
+
+  string_decoder@1.3.0:
+    dependencies:
+      safe-buffer: 5.2.1
 
   strnum@2.1.1: {}
 
@@ -8097,6 +8168,8 @@ snapshots:
   use-sync-external-store@1.5.0(react@18.0.0):
     dependencies:
       react: 18.0.0
+
+  util-deprecate@1.0.2: {}
 
   uuid@9.0.1: {}
 

@@ -3,8 +3,8 @@ import { fmtCurrency } from '@/lib/format'
 import FilterBar from '@/components/filters/FilterBar'
 import { parseFilters } from '@/lib/filters'
 
-export default async function BudgetVsActualPage({ searchParams }: { searchParams: Record<string, string|undefined> }) {
-  const { month = new Date().toISOString().slice(0,7), categoryId } = parseFilters(searchParams)
+export default async function BudgetVsActualPage({ searchParams }: { searchParams: Record<string, string|string[]|undefined> }) {
+  const { month = new Date().toISOString().slice(0,7), categoryIds } = parseFilters(searchParams)
   const sb = await getSupabaseServerClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return null
@@ -13,7 +13,7 @@ export default async function BudgetVsActualPage({ searchParams }: { searchParam
     .select('*')
     .eq('user_id', user.id)
     .eq('month', month)
-  if (categoryId) q = q.eq('category_id', categoryId)
+  if (categoryIds && categoryIds.length) q = q.in('category_id', categoryIds)
   const { data, error } = await q.order('category_name')
   if (error) throw error
 
@@ -24,7 +24,7 @@ export default async function BudgetVsActualPage({ searchParams }: { searchParam
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Budget vs Actual — {month}</h1>
-      <FilterBar init={{ month, categoryId }} />
+      <FilterBar init={{ month, categoryIds }} categories={[]} />
       <div className="overflow-x-auto border rounded">
         <table className="min-w-full text-sm">
           <thead>
