@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState, useMemo, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -26,7 +26,70 @@ interface Transaction {
   needsReview?: boolean
 }
 
-export default function TransactionsPage() {
+const MOCK_TRANSACTIONS: Transaction[] = [
+  {
+    id: "1",
+    date: "2024-01-15",
+    description: "Grocery Store Purchase",
+    amount: -85.32,
+    category: "Food & Groceries",
+    subcategory: "Groceries",
+    account: "Checking",
+    type: "expense",
+    isRecurring: false,
+    confidence: 0.95,
+  },
+  {
+    id: "2",
+    date: "2024-01-14",
+    description: "Paycheck Deposit",
+    amount: 1200.0,
+    category: "Income",
+    subcategory: "Salary",
+    account: "Checking",
+    type: "income",
+    isRecurring: true,
+    confidence: 1.0,
+  },
+  {
+    id: "3",
+    date: "2024-01-13",
+    description: "Gas Station",
+    amount: -45.67,
+    category: "Transportation",
+    subcategory: "Fuel",
+    account: "Credit Card",
+    type: "expense",
+    isRecurring: false,
+    confidence: 0.88,
+  },
+  {
+    id: "4",
+    date: "2024-01-12",
+    description: "Netflix Subscription",
+    amount: -15.99,
+    category: "Entertainment",
+    subcategory: "Streaming",
+    account: "Credit Card",
+    type: "expense",
+    isRecurring: true,
+    confidence: 0.99,
+  },
+  {
+    id: "5",
+    date: "2024-01-11",
+    description: "Unknown Merchant",
+    amount: -23.45,
+    category: "Uncategorized",
+    account: "Checking",
+    type: "expense",
+    isRecurring: false,
+    needsReview: true,
+    confidence: 0.2,
+  },
+]
+
+const TransactionsPage = React.memo(() => {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [selectedAccount, setSelectedAccount] = useState<string>("all")
@@ -34,84 +97,82 @@ export default function TransactionsPage() {
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [showCategorizeDialog, setShowCategorizeDialog] = useState(false)
 
-  // Mock data - in real app this would come from database
-  const transactions: Transaction[] = [
-    {
-      id: "1",
-      date: "2024-01-15",
-      description: "Grocery Store Purchase",
-      amount: -85.32,
-      category: "Food & Groceries",
-      subcategory: "Groceries",
-      account: "Checking",
-      type: "expense",
-      isRecurring: false,
-      confidence: 0.95,
-    },
-    {
-      id: "2",
-      date: "2024-01-14",
-      description: "Paycheck Deposit",
-      amount: 1200.0,
-      category: "Income",
-      subcategory: "Salary",
-      account: "Checking",
-      type: "income",
-      isRecurring: true,
-      confidence: 1.0,
-    },
-    {
-      id: "3",
-      date: "2024-01-13",
-      description: "Gas Station",
-      amount: -45.67,
-      category: "Transportation",
-      subcategory: "Fuel",
-      account: "Credit Card",
-      type: "expense",
-      isRecurring: false,
-      confidence: 0.88,
-    },
-    {
-      id: "4",
-      date: "2024-01-12",
-      description: "Netflix Subscription",
-      amount: -15.99,
-      category: "Entertainment",
-      subcategory: "Streaming",
-      account: "Credit Card",
-      type: "expense",
-      isRecurring: true,
-      confidence: 0.99,
-    },
-    {
-      id: "5",
-      date: "2024-01-11",
-      description: "Unknown Merchant",
-      amount: -23.45,
-      category: "Uncategorized",
-      account: "Checking",
-      type: "expense",
-      isRecurring: false,
-      needsReview: true,
-      confidence: 0.2,
-    },
-  ]
+  const filteredTransactions = useMemo(() => {
+    return MOCK_TRANSACTIONS.filter((transaction) => {
+      const matchesSearch = transaction.description.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesCategory = selectedCategory === "all" || transaction.category === selectedCategory
+      const matchesAccount = selectedAccount === "all" || transaction.account === selectedAccount
+      return matchesSearch && matchesCategory && matchesAccount
+    })
+  }, [searchTerm, selectedCategory, selectedAccount])
 
-  const filteredTransactions = transactions.filter((transaction) => {
-    const matchesSearch = transaction.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === "all" || transaction.category === selectedCategory
-    const matchesAccount = selectedAccount === "all" || transaction.account === selectedAccount
-    return matchesSearch && matchesCategory && matchesAccount
-  })
+  const statistics = useMemo(() => {
+    const uncategorizedCount = MOCK_TRANSACTIONS.filter((t) => t.category === "Uncategorized").length
+    const needsReviewCount = MOCK_TRANSACTIONS.filter((t) => t.needsReview).length
+    const totalIncome = MOCK_TRANSACTIONS.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
+    const totalExpenses = MOCK_TRANSACTIONS.filter((t) => t.type === "expense").reduce(
+      (sum, t) => sum + Math.abs(t.amount),
+      0,
+    )
 
-  const uncategorizedCount = transactions.filter((t) => t.category === "Uncategorized").length
-  const needsReviewCount = transactions.filter((t) => t.needsReview).length
-  const totalIncome = transactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0)
-  const totalExpenses = transactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + Math.abs(t.amount), 0)
+    return {
+      uncategorizedCount,
+      needsReviewCount,
+      totalIncome,
+      totalExpenses,
+    }
+  }, [])
 
-  const categories = Array.from(new Set(transactions.map((t) => t.category))).filter((cat) => cat !== "Uncategorized")
-  const accounts = Array.from(new Set(transactions.map((t) => t.account)))
+  const { categories, accounts } = useMemo(() => {
+    const categories = Array.from(new Set(MOCK_TRANSACTIONS.map((t) => t.category))).filter(
+      (cat) => cat !== "Uncategorized",
+    )
+    const accounts = Array.from(new Set(MOCK_TRANSACTIONS.map((t) => t.account)))
+    return { categories, accounts }
+  }, [])
+
+  const tabCounts = useMemo(
+    () => ({
+      all: filteredTransactions.length,
+      income: filteredTransactions.filter((t) => t.type === "income").length,
+      expenses: filteredTransactions.filter((t) => t.type === "expense").length,
+      uncategorized: filteredTransactions.filter((t) => t.category === "Uncategorized").length,
+    }),
+    [filteredTransactions],
+  )
+
+  const transactionsByType = useMemo(
+    () => ({
+      income: filteredTransactions.filter((t) => t.type === "income"),
+      expenses: filteredTransactions.filter((t) => t.type === "expense"),
+      uncategorized: filteredTransactions.filter((t) => t.category === "Uncategorized"),
+    }),
+    [filteredTransactions],
+  )
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value)
+  }, [])
+
+  const handleCategoryChange = useCallback((value: string) => {
+    setSelectedCategory(value)
+  }, [])
+
+  const handleAccountChange = useCallback((value: string) => {
+    setSelectedAccount(value)
+  }, [])
+
+  const handleDateRangeChange = useCallback((value: string) => {
+    setDateRange(value)
+  }, [])
+
+  const handleImportDialogChange = useCallback((open: boolean) => {
+    setShowImportDialog(open)
+  }, [])
+
+  const handleCategorizeDialogChange = useCallback((open: boolean) => {
+    setShowCategorizeDialog(open)
+  }, [])
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
@@ -127,9 +188,9 @@ export default function TransactionsPage() {
               <Upload className="w-4 h-4 mr-2" />
               Import
             </Button>
-            <Button onClick={() => setShowCategorizeDialog(true)} disabled={uncategorizedCount === 0}>
+            <Button onClick={() => setShowCategorizeDialog(true)} disabled={statistics.uncategorizedCount === 0}>
               <Tag className="w-4 h-4 mr-2" />
-              Categorize ({uncategorizedCount})
+              Categorize ({statistics.uncategorizedCount})
             </Button>
           </div>
         </div>
@@ -142,7 +203,7 @@ export default function TransactionsPage() {
               <DollarSign className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">${totalIncome.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-green-600">${statistics.totalIncome.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">This period</p>
             </CardContent>
           </Card>
@@ -153,7 +214,7 @@ export default function TransactionsPage() {
               <DollarSign className="h-4 w-4 text-red-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">${totalExpenses.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-red-600">${statistics.totalExpenses.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">This period</p>
             </CardContent>
           </Card>
@@ -165,12 +226,12 @@ export default function TransactionsPage() {
             </CardHeader>
             <CardContent>
               <div
-                className={`text-2xl font-bold ${totalIncome - totalExpenses >= 0 ? "text-green-600" : "text-red-600"}`}
+                className={`text-2xl font-bold ${statistics.totalIncome - statistics.totalExpenses >= 0 ? "text-green-600" : "text-red-600"}`}
               >
-                ${Math.abs(totalIncome - totalExpenses).toLocaleString()}
+                ${Math.abs(statistics.totalIncome - statistics.totalExpenses).toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground">
-                {totalIncome - totalExpenses >= 0 ? "Positive" : "Negative"}
+                {statistics.totalIncome - statistics.totalExpenses >= 0 ? "Positive" : "Negative"}
               </p>
             </CardContent>
           </Card>
@@ -181,7 +242,7 @@ export default function TransactionsPage() {
               <Tag className="h-4 w-4 text-orange-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{needsReviewCount}</div>
+              <div className="text-2xl font-bold text-orange-600">{statistics.needsReviewCount}</div>
               <p className="text-xs text-muted-foreground">Transactions</p>
             </CardContent>
           </Card>
@@ -197,12 +258,12 @@ export default function TransactionsPage() {
                   <Input
                     placeholder="Search transactions..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={handleSearchChange}
                     className="pl-10"
                   />
                 </div>
               </div>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <Select value={selectedCategory} onValueChange={handleCategoryChange}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
@@ -215,7 +276,7 @@ export default function TransactionsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+              <Select value={selectedAccount} onValueChange={handleAccountChange}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="All Accounts" />
                 </SelectTrigger>
@@ -228,7 +289,7 @@ export default function TransactionsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={dateRange} onValueChange={setDateRange}>
+              <Select value={dateRange} onValueChange={handleDateRangeChange}>
                 <SelectTrigger className="w-32">
                   <SelectValue />
                 </SelectTrigger>
@@ -249,25 +310,25 @@ export default function TransactionsPage() {
             <TabsTrigger value="all">
               All Transactions
               <Badge variant="secondary" className="ml-1">
-                {filteredTransactions.length}
+                {tabCounts.all}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="income">
               Income
               <Badge variant="secondary" className="ml-1">
-                {filteredTransactions.filter((t) => t.type === "income").length}
+                {tabCounts.income}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="expenses">
               Expenses
               <Badge variant="secondary" className="ml-1">
-                {filteredTransactions.filter((t) => t.type === "expense").length}
+                {tabCounts.expenses}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="uncategorized">
               Uncategorized
               <Badge variant="secondary" className="ml-1">
-                {filteredTransactions.filter((t) => t.category === "Uncategorized").length}
+                {tabCounts.uncategorized}
               </Badge>
             </TabsTrigger>
           </TabsList>
@@ -277,21 +338,25 @@ export default function TransactionsPage() {
           </TabsContent>
 
           <TabsContent value="income">
-            <TransactionList transactions={filteredTransactions.filter((t) => t.type === "income")} />
+            <TransactionList transactions={transactionsByType.income} />
           </TabsContent>
 
           <TabsContent value="expenses">
-            <TransactionList transactions={filteredTransactions.filter((t) => t.type === "expense")} />
+            <TransactionList transactions={transactionsByType.expenses} />
           </TabsContent>
 
           <TabsContent value="uncategorized">
-            <TransactionList transactions={filteredTransactions.filter((t) => t.category === "Uncategorized")} />
+            <TransactionList transactions={transactionsByType.uncategorized} />
           </TabsContent>
         </Tabs>
 
-        <ImportTransactionsDialog open={showImportDialog} onOpenChange={setShowImportDialog} />
-        <CategorizeTransactionsDialog open={showCategorizeDialog} onOpenChange={setShowCategorizeDialog} />
+        <ImportTransactionsDialog open={showImportDialog} onOpenChange={handleImportDialogChange} />
+        <CategorizeTransactionsDialog open={showCategorizeDialog} onOpenChange={handleCategorizeDialogChange} />
       </div>
     </div>
   )
-}
+})
+
+TransactionsPage.displayName = "TransactionsPage"
+
+export default TransactionsPage

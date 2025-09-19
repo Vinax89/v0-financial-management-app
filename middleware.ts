@@ -2,12 +2,12 @@ import { type NextRequest, NextResponse } from "next/server"
 import { updateSession } from "@/lib/supabase/middleware"
 import { apiLimiter, authLimiter } from "@/lib/rate-limit"
 import { securityHeaders } from "@/lib/security-utils"
-import { randomUUID } from 'node:crypto'
+import { randomUUID } from "node:crypto"
 
 export async function middleware(request: NextRequest) {
   const { pathname: path } = request.nextUrl
   const ip = request.ip ?? "127.0.0.1"
-  const rid = request.headers.get('x-request-id') || randomUUID()
+  const rid = request.headers.get("x-request-id") || randomUUID()
 
   // Rate limit API and auth routes
   const isAuth = path.startsWith("/api/auth") || path.startsWith("/api/plaid")
@@ -23,27 +23,57 @@ export async function middleware(request: NextRequest) {
         "X-RateLimit-Reset": reset.toString(),
       },
     })
-    res.headers.set('x-request-id', rid)
+    res.headers.set("x-request-id", rid)
     return res
   }
 
   // Maintain session
   const response = await updateSession(request)
-  response.headers.set('x-request-id', rid)
+  response.headers.set("x-request-id", rid)
 
   // Apply security headers
   Object.entries(securityHeaders).forEach(([key, value]) => {
     response.headers.set(key, value)
   })
 
-  // Block suspicious requests
   const userAgent = request.headers.get("user-agent") || ""
-  const suspiciousPatterns = [/bot/i, /crawler/i, /spider/i, /scraper/i, /hack/i, /exploit/i]
+  const suspiciousPatterns = [
+    /bot/i,
+    /crawler/i,
+    /spider/i,
+    /scraper/i,
+    /hack/i,
+    /exploit/i,
+    /sqlmap/i,
+    /nikto/i,
+    /nmap/i,
+    /masscan/i,
+    /zap/i,
+  ]
 
   if (suspiciousPatterns.some((pattern) => pattern.test(userAgent))) {
     console.log(`[Security] Blocked suspicious request from ${ip}: ${userAgent}`)
     const res = new NextResponse("Forbidden", { status: 403 })
-    res.headers.set('x-request-id', rid)
+    res.headers.set("x-request-id", rid)
+    return res
+  }
+
+  const url = request.url.toLowerCase()
+  const sqlInjectionPatterns = [
+    /union\s+select/i,
+    /drop\s+table/i,
+    /insert\s+into/i,
+    /delete\s+from/i,
+    /update\s+set/i,
+    /exec\s*\(/i,
+    /script\s*>/i,
+    /<\s*script/i,
+  ]
+
+  if (sqlInjectionPatterns.some((pattern) => pattern.test(url))) {
+    console.log(`[Security] Blocked potential SQL injection from ${ip}: ${url}`)
+    const res = new NextResponse("Forbidden", { status: 403 })
+    res.headers.set("x-request-id", rid)
     return res
   }
 
@@ -52,7 +82,7 @@ export async function middleware(request: NextRequest) {
   if (contentLength && Number.parseInt(contentLength) > 1024 * 1024) {
     // 1MB limit
     const res = new NextResponse("Request Too Large", { status: 413 })
-    res.headers.set('x-request-id', rid)
+    res.headers.set("x-request-id", rid)
     return res
   }
 

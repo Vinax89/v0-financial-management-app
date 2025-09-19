@@ -16,23 +16,60 @@ export default function Page() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [attemptCount, setAttemptCount] = useState(0)
+  const [isLocked, setIsLocked] = useState(false)
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (isLocked) {
+      setError("Account temporarily locked due to too many failed attempts. Please try again later.")
+      return
+    }
+
+    if (!email.trim() || !password.trim()) {
+      setError("Please fill in all fields")
+      return
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters")
+      return
+    }
+
     const supabase = createClient()
     setIsLoading(true)
     setError(null)
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim().toLowerCase(),
         password,
         options: {
           emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/protected`,
         },
       })
-      if (error) throw error
+
+      if (error) {
+        const newAttemptCount = attemptCount + 1
+        setAttemptCount(newAttemptCount)
+
+        if (newAttemptCount >= 5) {
+          setIsLocked(true)
+          setTimeout(
+            () => {
+              setIsLocked(false)
+              setAttemptCount(0)
+            },
+            15 * 60 * 1000,
+          ) // 15 minutes lockout
+        }
+
+        throw error
+      }
+
+      setAttemptCount(0)
       router.push("/protected")
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred")
