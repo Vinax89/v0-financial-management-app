@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Activity, Database, Zap, RefreshCw, Clock } from "lucide-react"
-import { dbOptimizer } from "@/lib/database-optimizer"
+import { clientDbOptimizer } from "@/lib/client-db-optimizer"
 
 interface PerformanceMetrics {
   cacheStats: {
@@ -41,7 +41,7 @@ const PerformanceMonitor = () => {
   const refreshMetrics = async () => {
     setIsRefreshing(true)
     try {
-      const cacheStats = dbOptimizer.getCacheStats()
+      const cacheStats = await clientDbOptimizer.getCacheStats()
 
       // Mock data for demo - in real app, fetch from database
       const mockMetrics: PerformanceMetrics = {
@@ -71,7 +71,7 @@ const PerformanceMonitor = () => {
 
   const refreshMaterializedViews = async () => {
     try {
-      await dbOptimizer.refreshMaterializedViews()
+      await clientDbOptimizer.refreshMaterializedViews()
       await refreshMetrics()
     } catch (error) {
       console.error("Failed to refresh materialized views:", error)
@@ -79,7 +79,7 @@ const PerformanceMonitor = () => {
   }
 
   const clearCache = () => {
-    dbOptimizer.clearCache()
+    clientDbOptimizer.clearCache()
     refreshMetrics()
   }
 
