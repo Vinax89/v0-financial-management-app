@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import * as React from "react"
 import { usePathname } from "next/navigation"
@@ -141,8 +141,22 @@ const data = {
   navSecondary: [
     {
       title: "Analytics",
-      url: "/analytics",
+      url: "/dashboard/analytics/budget-vs-actual",
       icon: BarChart3,
+      items: [
+        {
+          title: "Budget vs Actual",
+          url: "/dashboard/analytics/budget-vs-actual",
+        },
+        {
+          title: "Cashflow",
+          url: "/dashboard/analytics/cashflow",
+        },
+        {
+          title: "Top Categories",
+          url: "/dashboard/analytics/top-categories",
+        },
+      ],
     },
     {
       title: "Reports",
@@ -235,6 +249,22 @@ export const AppSidebar = React.memo(function AppSidebar({ ...props }: React.Com
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
+                  {item.items?.length ? (
+                    <SidebarMenuSub>
+                      {item.items.map((subItem) => (
+                        <SidebarMenuSubItem key={subItem.title}>
+                          <SidebarMenuSubButton
+                            asChild
+                            className={cn("transition-all duration-200", pathname === subItem.url && "bg-accent/50")}
+                          >
+                            <Link href={subItem.url}>
+                              <span>{subItem.title}</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  ) : null}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
