@@ -14,6 +14,11 @@ type Row = {
   confidence_score: number | null
   created_at: string
   thumb_path: string | null
+  merchant_name?: string | null
+  total_amount?: number | null
+  transaction_date?: string | null
+  raw_text?: string | null
+  updated_at?: string
 }
 
 export default function ReceiptGallery({ userId, initialRows, page, size, total }: { userId: string; initialRows: Row[]; page: number; size: number; total: number }) {
@@ -22,6 +27,17 @@ export default function ReceiptGallery({ userId, initialRows, page, size, total 
   const [loading, setLoading] = React.useState(false)
   const [conf, setConf] = React.useState<{ min?: number; max?: number }>({})
   const [editingId, setEditingId] = React.useState<string | null>(null)
+
+  function applyPatch(patch: any) {
+    setRows(prev => prev.map(r => r.id === patch.id ? {
+      ...r,
+      merchant_name: patch.merchant_name ?? r.merchant_name,
+      total_amount: patch.total_amount ?? r.total_amount,
+      transaction_date: patch.transaction_date ?? r.transaction_date,
+      raw_text: patch.raw_text ?? r.raw_text,
+      updated_at: patch.updated_at ?? r.updated_at,
+    } : r))
+  }
 
   React.useEffect(() => {
     const sb = getSupabaseBrowserClient()
@@ -57,8 +73,7 @@ export default function ReceiptGallery({ userId, initialRows, page, size, total 
         } catch {}
       }))
       setThumbs(out)
-    })()
-  }, [rows])
+    })() }, [rows])
 
   function statusBadge(s: Row['processing_status']) {
     const cls = s === 'completed' ? 'bg-emerald-100 border-emerald-300' : s === 'failed' ? 'bg-red-100 border-red-300' : 'bg-amber-50 border-amber-300'
@@ -104,7 +119,7 @@ export default function ReceiptGallery({ userId, initialRows, page, size, total 
           {page<pages && <a className="px-2 py-1 border rounded" href={`?page=${page+1}&size=${size}`}>Next</a>}
         </div>
       </div>
-      <ReceiptEditorModal id={editingId||''} open={!!editingId} onClose={()=>setEditingId(null)} onSaved={()=>{/* no-op; realtime will refresh */}} />
+      <ReceiptEditorModal id={editingId||''} open={!!editingId} onClose={()=>setEditingId(null)} onSaved={applyPatch} />
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import 'server-only'
 import { plaidClient, mapPlaidCategoryToLocal, mapPersonalFinanceCategory } from "./plaid-client"
 import { getSupabaseServerClient } from "./supabase/server"
 import { encryptToString, decryptFromString } from "@/lib/crypto/encryption"

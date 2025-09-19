@@ -1,1 +1,5 @@
-export { default } from "@sentry/nextjs/edge-tunnel";
+import { tunnel } from '@sentry/nextjs';
+
+export const runtime = 'edge';
+
+export const POST = tunnel;

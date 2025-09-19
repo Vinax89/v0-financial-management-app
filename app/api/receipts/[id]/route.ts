@@ -31,14 +31,28 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const body = await req.json().catch(()=>null)
   const parsed = ReceiptUpdate.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Bad payload' }, { status: 400 })
+  const ifVersion = (body && (body.ifVersion as string)) || undefined
 
-  const { data, error } = await sb
+  let q = sb
     .from('receipts')
     .update(parsed.data)
     .eq('id', params.id)
     .eq('user_id', user.id)
     .select('id,merchant_name,total_amount,transaction_date,raw_text,confidence_score,processing_status,updated_at')
-    .single()
+  if (ifVersion) {
+    q = q.eq('updated_at', ifVersion)
+  }
+  const { data, error } = await q.single()
+  if (error && error.code === 'PGRST116') { // no rows
+    // Fetch current row to return to client for reconciliation
+    const { data: current } = await sb
+      .from('receipts')
+      .select('id,merchant_name,total_amount,transaction_date,raw_text,confidence_score,processing_status,updated_at')
+      .eq('id', params.id)
+      .eq('user_id', user.id)
+      .single()
+    return NextResponse.json({ error: 'Version conflict', current }, { status: 409 })
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ receipt: data })
 }

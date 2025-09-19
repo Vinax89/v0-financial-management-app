@@ -4,9 +4,11 @@ import { createClient } from '@supabase/supabase-js'
 import { computeBackoffMs } from '@/lib/jobs/backoff'
 import { processReceiptWithAI } from "@/lib/ocr-service"
 import sharp from 'sharp'
+import { createHmac } from 'crypto'
 
 function safeEqual(a: string, b: string) { if (a.length !== b.length) return false; let o=0; for (let i=0;i<a.length;i++) o|=a.charCodeAt(i)^b.charCodeAt(i); return o===0 }
 
+export const runtime = 'nodejs'
 export async function POST(req: Request) {
   const hdr = req.headers.get('x-cron-secret') || ''
   const secret = process.env.CRON_SECRET || ''
@@ -58,7 +60,7 @@ export async function POST(req: Request) {
         const secret = process.env.PDF_THUMBNAIL_SECRET || ''
         if (endpoint && secret) {
           const payload = JSON.stringify({ url: signed.signedUrl, width: 640 })
-          const sig = await import('node:crypto').then(({ createHmac }) => createHmac('sha256', secret).update(payload).digest('hex'))
+          const sig = createHmac('sha256', secret).update(payload).digest('hex')
           const resp = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', 'x-signature': sig }, body: payload })
           if (!resp.ok) throw new Error('thumbnail service failed')
           const { jpegBase64 } = await resp.json() as { jpegBase64: string }
