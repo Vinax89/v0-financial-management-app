@@ -1,7 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getSupabaseServerClient } from "@/lib/supabase/server"
-import { processReceiptWithAI } from "@/lib/ocr-service"
-import { z } from "zod"
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,25 +20,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File too large" }, { status: 413 })
     }
 
-    // Convert file to base64 for AI processing and get bytes for storage
+    // Get bytes for storage
     const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    const base64 = buffer.toString("base64")
 
-    // Process receipt with AI
-    const receiptData = await processReceiptWithAI(base64, file.type)
+    // Do NOT OCR inline. Insert row and enqueue a job.
     
-    // Shape hardening
-    const ReceiptData = z.object({
-      merchantName: z.string().optional().default(''),
-      totalAmount: z.number().nullable().optional().transform(v => v ?? null),
-      date: z.string().optional(),
-      items: z.array(z.any()).optional().default([]),
-      rawText: z.string().optional().default(''),
-      confidence: z.number().min(0).max(1).optional().default(0)
-    })
-    const safe = ReceiptData.parse(receiptData)
-
     // Upload raw file to Storage (path: userId/ISOdate_filename)
     const path = `${user.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`
     const { error: upErr } = await supabase.storage.from('receipts').upload(path, Buffer.from(bytes), { contentType: file.type, upsert: false })
@@ -59,32 +43,30 @@ export async function POST(request: NextRequest) {
         file_size: (file as any).size ?? null,
         mime_type: file.type,
         file_url: signed?.signedUrl || null,
-        merchant_name: safe.merchantName,
-        total_amount: safe.totalAmount,
-        transaction_date: safe.date,
-        items: safe.items,
-        raw_text: safe.rawText,
-        confidence_score: safe.confidence,
-        processing_status: "completed",
+        file_path: path,
+        processing_status: "uploaded",
       })
       .select()
       .single()
 
     if (dbError) {
       console.error("Database error:", dbError)
-      return NextResponse.json({ error: "Failed to save receipt" }, { status: 500 })
+      return NextResponse.json({ error: dbError.message }, { status: 500 })
     }
+    
+    const { error: jobErr } = await supabase
+      .from('receipt_ocr_jobs')
+      .insert({ receipt_id: receipt.id, user_id: user.id, status: 'queued' })
+      
+    if (jobErr) {
+      console.error("Job creation error:", jobErr)
+      return NextResponse.json({ error: jobErr.message }, { status: 500 })
+    }
+    
+    return NextResponse.json({ receipt, queued: true })
 
-    return NextResponse.json({
-      success: true,
-      receipt,
-      extractedData: receiptData,
-    })
   } catch (error) {
     console.error("Receipt upload error:", error)
-    if (error instanceof z.ZodError) {
-        return NextResponse.json({ error: "Invalid data from OCR service", details: error.issues }, { status: 500 })
-    }
     return NextResponse.json(
       {
         error: "Failed to process receipt",
