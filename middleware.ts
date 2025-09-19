@@ -49,8 +49,8 @@ export async function middleware(request: NextRequest) {
 
   // Validate request size
   const contentLength = request.headers.get("content-length")
-  if (contentLength && Number.parseInt(contentLength) > 1024 * 1024) {
-    // 1MB limit
+  const isUpload = path.startsWith('/api/receipts/upload')
+  if (!isUpload && contentLength && Number.parseInt(contentLength) > 1024 * 1024) {
     const res = new NextResponse("Request Too Large", { status: 413 })
     res.headers.set('x-request-id', rid)
     return res
