@@ -38,7 +38,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={`${nunitoSans.variable}`} suppressHydrationWarning>
       <body className={`font-sans ${inter.variable} ${nunitoSans.variable} antialiased`}>
         <ThemeProvider>
           <AuthProvider>
