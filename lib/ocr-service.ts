@@ -9,7 +9,7 @@ export interface ReceiptData {
   merchantName?: string
   transactionDate?: Date
   totalAmount?: number
-  extractedData?: any
+  extractedData?: ExtractedReceiptMetadata
   confidence?: number
 }
 
@@ -28,12 +28,112 @@ export interface ExtractedReceiptData {
   confidence: number
 }
 
+export interface ExtractedReceiptMetadata {
+  merchantAddress?: string
+  transactionTime?: string
+  subtotal?: number
+  taxAmount?: number
+  tipAmount?: number
+  paymentMethod?: string
+  lineItems: LineItem[]
+  suggestedCategory?: string
+}
+
 export interface LineItem {
   name: string
   quantity: number
   unitPrice: number
   totalPrice: number
   category?: string
+  confidence?: number
+}
+
+export interface OpenAIReceiptResponse {
+  merchantName?: string
+  merchantAddress?: string
+  transactionDate?: string
+  transactionTime?: string
+  subtotal?: number
+  taxAmount?: number
+  tipAmount?: number
+  totalAmount?: number
+  paymentMethod?: string
+  lineItems?: Array<{
+    name: string
+    quantity: number
+    unitPrice: number
+    totalPrice: number
+    category?: string
+  }>
+  suggestedCategory?: string
+  confidence?: number
+}
+
+export interface ProcessedReceiptData {
+  merchantName: string
+  merchantAddress?: string
+  date: string
+  time?: string
+  subtotal?: number
+  tax?: number
+  tip?: number
+  totalAmount: number
+  paymentMethod?: string
+  items: Array<{
+    name: string
+    quantity: number
+    price: number
+  }>
+  category: string
+  confidence: number
+  rawText: string
+}
+
+export interface DatabaseReceiptRow {
+  id: string
+  file_name: string
+  file_url: string
+  status: string
+  merchant_name?: string
+  merchant_address?: string
+  transaction_date?: string
+  transaction_time?: string
+  subtotal?: number
+  tax_amount?: number
+  tip_amount?: number
+  total_amount?: number
+  payment_method?: string
+  suggested_category?: string
+  confidence_score?: number
+  receipt_line_items?: DatabaseLineItemRow[]
+}
+
+export interface DatabaseLineItemRow {
+  id: string
+  receipt_id: string
+  line_number: number
+  item_name: string
+  quantity: number
+  unit_price: number
+  total_price: number
+  item_category?: string
+  confidence_score?: number
+}
+
+export interface TransactionUpdateData {
+  amount?: number
+  description?: string
+  merchant_name?: string
+  date?: string
+  category?: string
+}
+
+export interface ProcessingStats {
+  totalReceipts: number
+  completedReceipts: number
+  failedReceipts: number
+  successRate: number
+  averageConfidence: number
 }
 
 export class OCRService {
@@ -121,28 +221,37 @@ export class OCRService {
           confidence_score: extractedData.confidence,
           merchant_name: extractedData.merchantName,
           merchant_address: extractedData.merchantAddress,
-          transaction_date: extractedData.transactionDate,
-          transaction_time: extractedData.transactionTime,
+          transaction_date: extractedData.date,
+          transaction_time: extractedData.time,
           subtotal: extractedData.subtotal,
-          tax_amount: extractedData.taxAmount,
-          tip_amount: extractedData.tipAmount,
+          tax_amount: extractedData.tax,
+          tip_amount: extractedData.tip,
           total_amount: extractedData.totalAmount,
           payment_method: extractedData.paymentMethod,
-          line_items: extractedData.lineItems,
-          suggested_category: extractedData.suggestedCategory,
-          category_confidence: extractedData.categoryConfidence,
+          receipt_line_items: extractedData.items.map((item: any, index: number) => ({
+            receipt_id: receiptId,
+            line_number: index + 1,
+            item_name: item.name,
+            quantity: item.quantity,
+            unit_price: item.price,
+            total_price: item.price * item.quantity,
+            item_category: item.category,
+            confidence_score: item.confidence || extractedData.confidence,
+          })),
+          suggested_category: extractedData.category,
+          category_confidence: extractedData.confidence,
         })
         .eq("id", receiptId)
 
       // Store line items
-      if (extractedData.lineItems && extractedData.lineItems.length > 0) {
-        const lineItemsData = extractedData.lineItems.map((item: any, index: number) => ({
+      if (extractedData.items && extractedData.items.length > 0) {
+        const lineItemsData = extractedData.items.map((item: any, index: number) => ({
           receipt_id: receiptId,
           line_number: index + 1,
           item_name: item.name,
           quantity: item.quantity,
-          unit_price: item.unitPrice,
-          total_price: item.totalPrice,
+          unit_price: item.price,
+          total_price: item.price * item.quantity,
           item_category: item.category,
           confidence_score: item.confidence || extractedData.confidence,
         }))
@@ -176,7 +285,7 @@ export class OCRService {
   }
 
   // Extract receipt data using AI OCR
-  private async extractReceiptData(imageUrl: string): Promise<any> {
+  private async extractReceiptData(imageUrl: string): Promise<ProcessedReceiptData> {
     try {
       // Use OpenAI Vision API for OCR
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -244,57 +353,55 @@ export class OCRService {
       }
 
       // Parse JSON response
-      const extractedData = JSON.parse(content)
+      const extractedData: OpenAIReceiptResponse = JSON.parse(content)
 
       // Add raw text and additional processing
       return {
         rawText: content,
         confidence: extractedData.confidence || 0.8,
-        merchantName: extractedData.merchantName,
+        merchantName: extractedData.merchantName || "Unknown Merchant",
         merchantAddress: extractedData.merchantAddress,
-        transactionDate: extractedData.transactionDate,
-        transactionTime: extractedData.transactionTime,
+        date: extractedData.transactionDate || new Date().toISOString().split("T")[0],
+        time: extractedData.transactionTime,
         subtotal: extractedData.subtotal,
-        taxAmount: extractedData.taxAmount,
-        tipAmount: extractedData.tipAmount,
-        totalAmount: extractedData.totalAmount,
+        tax: extractedData.taxAmount,
+        tip: extractedData.tipAmount,
+        totalAmount: extractedData.totalAmount || 0,
         paymentMethod: extractedData.paymentMethod,
-        lineItems: extractedData.lineItems || [],
-        suggestedCategory: extractedData.suggestedCategory || "Other",
-        categoryConfidence: extractedData.confidence || 0.8,
+        items: (extractedData.lineItems || []).map((item) => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.totalPrice,
+        })),
+        category: extractedData.suggestedCategory || "Other",
       }
     } catch (error) {
       console.error("OCR extraction failed:", error)
-
-      // Fallback to basic text extraction
       return this.fallbackTextExtraction(imageUrl)
     }
   }
 
   // Fallback text extraction method
-  private async fallbackTextExtraction(imageUrl: string): Promise<any> {
-    // This would use a simpler OCR service like Google Vision API
-    // For now, return a basic structure
+  private async fallbackTextExtraction(imageUrl: string): Promise<ProcessedReceiptData> {
     return {
       rawText: "Receipt text extraction failed",
       confidence: 0.1,
       merchantName: "Unknown Merchant",
-      transactionDate: new Date().toISOString().split("T")[0],
+      date: new Date().toISOString().split("T")[0],
       totalAmount: 0,
-      lineItems: [],
-      suggestedCategory: "Other",
-      categoryConfidence: 0.1,
+      items: [],
+      category: "Other",
     }
   }
 
   // Create transaction from receipt data
-  private async createTransactionFromReceipt(receiptId: string, extractedData: any): Promise<void> {
+  private async createTransactionFromReceipt(receiptId: string, extractedData: ProcessedReceiptData): Promise<void> {
     try {
       const transactionData = {
         amount: -(extractedData.totalAmount || 0), // Negative for expenses
-        description: `${extractedData.merchantName || "Receipt"} - ${extractedData.transactionDate}`,
-        date: extractedData.transactionDate || new Date().toISOString().split("T")[0],
-        category: extractedData.suggestedCategory || "Other",
+        description: `${extractedData.merchantName || "Receipt"} - ${extractedData.date}`,
+        date: extractedData.date || new Date().toISOString().split("T")[0],
+        category: extractedData.category || "Other",
         source: "receipt_ocr",
         source_id: receiptId,
         merchant_name: extractedData.merchantName,
@@ -302,10 +409,10 @@ export class OCRService {
           receipt_id: receiptId,
           ocr_confidence: extractedData.confidence,
           subtotal: extractedData.subtotal,
-          tax_amount: extractedData.taxAmount,
-          tip_amount: extractedData.tipAmount,
+          tax_amount: extractedData.tax,
+          tip_amount: extractedData.tip,
           payment_method: extractedData.paymentMethod,
-          line_items: extractedData.lineItems,
+          line_items: extractedData.items,
         },
       }
 
@@ -400,7 +507,7 @@ export class OCRService {
 
     if (!receipt?.transaction_id) return
 
-    const transactionUpdates: any = {}
+    const transactionUpdates: TransactionUpdateData = {}
 
     if (updates.totalAmount !== undefined) {
       transactionUpdates.amount = -updates.totalAmount
@@ -452,7 +559,7 @@ export class OCRService {
   }
 
   // Get processing statistics
-  async getProcessingStats(userId: string): Promise<any> {
+  async getProcessingStats(userId: string): Promise<ProcessingStats | null> {
     const { data: stats } = await this.supabase
       .from("receipts")
       .select("status, confidence_score, created_at")
@@ -464,7 +571,8 @@ export class OCRService {
     const completedReceipts = stats.filter((s) => s.status === "completed").length
     const failedReceipts = stats.filter((s) => s.status === "failed").length
     const averageConfidence =
-      stats.filter((s) => s.confidence_score).reduce((sum, s) => sum + s.confidence_score, 0) / completedReceipts || 0
+      stats.filter((s) => s.confidence_score).reduce((sum, s) => sum + (s.confidence_score || 0), 0) /
+        completedReceipts || 0
 
     return {
       totalReceipts,
@@ -476,12 +584,12 @@ export class OCRService {
   }
 
   // Helper method to map database data to ReceiptData
-  private mapReceiptData(row: any): ReceiptData {
+  private mapReceiptData(row: DatabaseReceiptRow): ReceiptData {
     return {
       id: row.id,
       fileName: row.file_name,
       fileUrl: row.file_url,
-      status: row.status,
+      status: row.status as "uploaded" | "processing" | "completed" | "failed",
       merchantName: row.merchant_name,
       transactionDate: row.transaction_date ? new Date(row.transaction_date) : undefined,
       totalAmount: row.total_amount,
@@ -492,7 +600,14 @@ export class OCRService {
         taxAmount: row.tax_amount,
         tipAmount: row.tip_amount,
         paymentMethod: row.payment_method,
-        lineItems: row.receipt_line_items || [],
+        lineItems: (row.receipt_line_items || []).map((item) => ({
+          name: item.item_name,
+          quantity: item.quantity,
+          unitPrice: item.unit_price,
+          totalPrice: item.total_price,
+          category: item.item_category,
+          confidence: item.confidence_score,
+        })),
         suggestedCategory: row.suggested_category,
       },
       confidence: row.confidence_score,
@@ -503,7 +618,7 @@ export class OCRService {
 // Export singleton instance
 export const ocrService = new OCRService()
 
-export async function processReceiptWithAI(base64Image: string, mimeType: string) {
+export async function processReceiptWithAI(base64Image: string, mimeType: string): Promise<ProcessedReceiptData> {
   try {
     // Use OpenAI Vision API for OCR
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -570,7 +685,7 @@ export async function processReceiptWithAI(base64Image: string, mimeType: string
     }
 
     // Parse JSON response
-    const extractedData = JSON.parse(content)
+    const extractedData: OpenAIReceiptResponse = JSON.parse(content)
 
     return {
       merchantName: extractedData.merchantName || "Unknown Merchant",
@@ -578,12 +693,12 @@ export async function processReceiptWithAI(base64Image: string, mimeType: string
       date: extractedData.date || new Date().toISOString().split("T")[0],
       time: extractedData.time,
       subtotal: extractedData.subtotal,
-      tax: extractedData.tax,
-      tip: extractedData.tip,
+      tax: extractedData.taxAmount,
+      tip: extractedData.tipAmount,
       totalAmount: extractedData.totalAmount || 0,
       paymentMethod: extractedData.paymentMethod,
-      items: extractedData.items || [],
-      category: extractedData.category || "Other",
+      items: extractedData.lineItems || [],
+      category: extractedData.suggestedCategory || "Other",
       confidence: extractedData.confidence || 0.8,
       rawText: content,
     }

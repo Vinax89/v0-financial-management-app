@@ -1,19 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { getSupabaseServerClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const supabase = getSupabaseServerClient()
 
-    // Get user from session
+    // Get user from session - RLS will automatically filter by user_id
     const {
       data: { user },
       error: authError,
@@ -27,7 +19,6 @@ export async function GET(request: NextRequest) {
     const limit = Number.parseInt(searchParams.get("limit") || "10")
     const offset = (page - 1) * limit
 
-    // Fetch receipts for the user
     const {
       data: receipts,
       error,
@@ -35,7 +26,6 @@ export async function GET(request: NextRequest) {
     } = await supabase
       .from("receipts")
       .select("*", { count: "exact" })
-      .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1)
 

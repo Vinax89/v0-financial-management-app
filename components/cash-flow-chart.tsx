@@ -7,9 +7,29 @@ interface CashFlowChartProps {
   timeRange: string
 }
 
+interface CashFlowData {
+  month: string
+  income: number
+  expenses: number
+  cashFlow: number
+}
+
+interface TooltipPayload {
+  color: string
+  name: string
+  value: number
+  dataKey: string
+}
+
+interface CustomTooltipProps {
+  active?: boolean
+  payload?: TooltipPayload[]
+  label?: string
+}
+
 export function CashFlowChart({ timeRange }: CashFlowChartProps) {
   // Mock data - in real app this would be calculated from actual transactions
-  const data = [
+  const data: CashFlowData[] = [
     { month: "Jan", income: 4200, expenses: 3100, cashFlow: 1100 },
     { month: "Feb", income: 4400, expenses: 3300, cashFlow: 1100 },
     { month: "Mar", income: 4600, expenses: 3200, cashFlow: 1400 },
@@ -18,13 +38,13 @@ export function CashFlowChart({ timeRange }: CashFlowChartProps) {
     { month: "Jun", income: 4800, expenses: 3650, cashFlow: 1150 },
   ]
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-2xl backdrop-blur-sm">
           <p className="font-semibold text-gray-900 mb-3 text-base">{label} 2024</p>
           <div className="space-y-2">
-            {payload.map((entry: any, index: number) => (
+            {payload.map((entry, index) => (
               <div key={index} className="flex items-center justify-between min-w-[160px]">
                 <div className="flex items-center space-x-2">
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />

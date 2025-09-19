@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import React from "react"
+
+import { useState, useCallback, useEffect, useMemo } from "react"
 import { usePlaidLink } from "react-plaid-link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,18 +32,103 @@ interface ConnectedAccount {
   lastSync: Date
 }
 
+const AccountItem = React.memo(({ account }: { account: ConnectedAccount["accounts"][0] }) => (
+  <div className="flex items-center justify-between p-3 bg-muted/50 rounded">
+    <div className="flex items-center gap-2">
+      <CreditCard className="w-4 h-4 text-muted-foreground" />
+      <div>
+        <div className="font-medium text-sm">{account.name}</div>
+        <div className="text-xs text-muted-foreground">
+          {account.type} • ****{account.mask}
+        </div>
+      </div>
+    </div>
+    <div className="text-right">
+      <div className="font-medium text-sm">${account.balance.toLocaleString()}</div>
+      <div className="text-xs text-muted-foreground">{account.subtype}</div>
+    </div>
+  </div>
+))
+
+AccountItem.displayName = "AccountItem"
+
+const ConnectionItem = React.memo(
+  ({
+    connection,
+    onSync,
+    onDisconnect,
+  }: {
+    connection: ConnectedAccount
+    onSync: (itemId: string) => void
+    onDisconnect: (itemId: string) => void
+  }) => {
+    const getStatusColor = useCallback((status: string) => {
+      switch (status) {
+        case "active":
+          return "default"
+        case "error":
+          return "destructive"
+        case "requires_update":
+          return "secondary"
+        default:
+          return "outline"
+      }
+    }, [])
+
+    const getStatusIcon = useCallback((status: string) => {
+      switch (status) {
+        case "active":
+          return <CheckCircle className="w-4 h-4 text-green-500" />
+        case "error":
+          return <AlertCircle className="w-4 h-4 text-red-500" />
+        case "requires_update":
+          return <AlertCircle className="w-4 h-4 text-yellow-500" />
+        default:
+          return <Building2 className="w-4 h-4 text-gray-500" />
+      }
+    }, [])
+
+    const accountItems = useMemo(
+      () => connection.accounts.map((account) => <AccountItem key={account.id} account={account} />),
+      [connection.accounts],
+    )
+
+    return (
+      <div className="border rounded-lg p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            {getStatusIcon(connection.status)}
+            <div>
+              <h4 className="font-medium">{connection.institutionName}</h4>
+              <p className="text-sm text-muted-foreground">Last synced: {connection.lastSync.toLocaleString()}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant={getStatusColor(connection.status)}>{connection.status}</Badge>
+            <Button variant="outline" size="sm" onClick={() => onSync(connection.itemId)}>
+              Sync
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onDisconnect(connection.itemId)}>
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">{accountItems}</div>
+      </div>
+    )
+  },
+)
+
+ConnectionItem.displayName = "ConnectionItem"
+
 export function PlaidLink({ userId, onSuccess, onError }: PlaidLinkProps) {
   const [linkToken, setLinkToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([])
 
-  // Load connected accounts
-  useEffect(() => {
-    loadConnectedAccounts()
-  }, [userId])
-
-  const loadConnectedAccounts = async () => {
+  const loadConnectedAccounts = useCallback(async () => {
     try {
       const response = await fetch(`/api/plaid/accounts?userId=${userId}`)
       if (!response.ok) throw new Error("Failed to load accounts")
@@ -51,10 +138,13 @@ export function PlaidLink({ userId, onSuccess, onError }: PlaidLinkProps) {
     } catch (error) {
       console.error("Failed to load connected accounts:", error)
     }
-  }
+  }, [userId])
 
-  // Create link token
-  const createLinkToken = async () => {
+  useEffect(() => {
+    loadConnectedAccounts()
+  }, [loadConnectedAccounts])
+
+  const createLinkToken = useCallback(async () => {
     setIsLoading(true)
     setError(null)
 
@@ -78,9 +168,8 @@ export function PlaidLink({ userId, onSuccess, onError }: PlaidLinkProps) {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [userId, onError])
 
-  // Handle successful link
   const onPlaidSuccess = useCallback(
     async (publicToken: string, metadata: any) => {
       setIsLoading(true)
@@ -112,10 +201,9 @@ export function PlaidLink({ userId, onSuccess, onError }: PlaidLinkProps) {
         setIsLoading(false)
       }
     },
-    [userId, onSuccess, onError],
+    [userId, onSuccess, onError, loadConnectedAccounts],
   )
 
-  // Handle link error
   const onPlaidError = useCallback(
     (error: any) => {
       console.error("Plaid Link error:", error)
@@ -125,7 +213,6 @@ export function PlaidLink({ userId, onSuccess, onError }: PlaidLinkProps) {
     [onError],
   )
 
-  // Handle link exit
   const onPlaidExit = useCallback((error: any, metadata: any) => {
     if (error) {
       console.error("Plaid Link exit error:", error)
@@ -142,71 +229,62 @@ export function PlaidLink({ userId, onSuccess, onError }: PlaidLinkProps) {
     onExit: onPlaidExit,
   })
 
-  // Disconnect account
-  const disconnectAccount = async (itemId: string) => {
-    if (!confirm("Are you sure you want to disconnect this bank account?")) return
+  const disconnectAccount = useCallback(
+    async (itemId: string) => {
+      if (!confirm("Are you sure you want to disconnect this bank account?")) return
 
-    try {
-      const response = await fetch("/api/plaid/remove-item", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId, userId }),
-      })
+      try {
+        const response = await fetch("/api/plaid/remove-item", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ itemId, userId }),
+        })
 
-      if (!response.ok) throw new Error("Failed to disconnect account")
+        if (!response.ok) throw new Error("Failed to disconnect account")
 
-      // Reload connected accounts
-      await loadConnectedAccounts()
-    } catch (error) {
-      console.error("Failed to disconnect account:", error)
-      setError("Failed to disconnect account")
-    }
-  }
+        // Reload connected accounts
+        await loadConnectedAccounts()
+      } catch (error) {
+        console.error("Failed to disconnect account:", error)
+        setError("Failed to disconnect account")
+      }
+    },
+    [userId, loadConnectedAccounts],
+  )
 
-  // Sync account data
-  const syncAccount = async (itemId: string) => {
-    try {
-      const response = await fetch("/api/plaid/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId, userId }),
-      })
+  const syncAccount = useCallback(
+    async (itemId: string) => {
+      try {
+        const response = await fetch("/api/plaid/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ itemId, userId }),
+        })
 
-      if (!response.ok) throw new Error("Failed to sync account")
+        if (!response.ok) throw new Error("Failed to sync account")
 
-      // Reload connected accounts
-      await loadConnectedAccounts()
-    } catch (error) {
-      console.error("Failed to sync account:", error)
-      setError("Failed to sync account")
-    }
-  }
+        // Reload connected accounts
+        await loadConnectedAccounts()
+      } catch (error) {
+        console.error("Failed to sync account:", error)
+        setError("Failed to sync account")
+      }
+    },
+    [userId, loadConnectedAccounts],
+  )
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "default"
-      case "error":
-        return "destructive"
-      case "requires_update":
-        return "secondary"
-      default:
-        return "outline"
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "active":
-        return <CheckCircle className="w-4 h-4 text-green-500" />
-      case "error":
-        return <AlertCircle className="w-4 h-4 text-red-500" />
-      case "requires_update":
-        return <AlertCircle className="w-4 h-4 text-yellow-500" />
-      default:
-        return <Building2 className="w-4 h-4 text-gray-500" />
-    }
-  }
+  const connectionList = useMemo(
+    () =>
+      connectedAccounts.map((connection) => (
+        <ConnectionItem
+          key={connection.id}
+          connection={connection}
+          onSync={syncAccount}
+          onDisconnect={disconnectAccount}
+        />
+      )),
+    [connectedAccounts, syncAccount, disconnectAccount],
+  )
 
   return (
     <div className="space-y-6">
@@ -255,52 +333,7 @@ export function PlaidLink({ userId, onSuccess, onError }: PlaidLinkProps) {
             <CardDescription>Manage your connected bank accounts and sync status</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {connectedAccounts.map((connection) => (
-                <div key={connection.id} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      {getStatusIcon(connection.status)}
-                      <div>
-                        <h4 className="font-medium">{connection.institutionName}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Last synced: {connection.lastSync.toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={getStatusColor(connection.status)}>{connection.status}</Badge>
-                      <Button variant="outline" size="sm" onClick={() => syncAccount(connection.itemId)}>
-                        Sync
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => disconnectAccount(connection.itemId)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {connection.accounts.map((account) => (
-                      <div key={account.id} className="flex items-center justify-between p-3 bg-muted/50 rounded">
-                        <div className="flex items-center gap-2">
-                          <CreditCard className="w-4 h-4 text-muted-foreground" />
-                          <div>
-                            <div className="font-medium text-sm">{account.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {account.type} • ****{account.mask}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-medium text-sm">${account.balance.toLocaleString()}</div>
-                          <div className="text-xs text-muted-foreground">{account.subtype}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <div className="space-y-4">{connectionList}</div>
           </CardContent>
         </Card>
       )}

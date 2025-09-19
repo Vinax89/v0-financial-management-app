@@ -1,12 +1,25 @@
 "use client"
 
 import type React from "react"
+import { useCallback, useMemo, useRef, useState, useEffect } from "react"
 
-import { useCallback, useMemo, useRef } from "react"
-
-// Debounce hook for expensive calculations
 export function useDebounce<T extends (...args: any[]) => any>(callback: T, delay: number): T {
   const timeoutRef = useRef<NodeJS.Timeout>()
+  const callbackRef = useRef(callback)
+
+  // Update callback ref when callback changes
+  useEffect(() => {
+    callbackRef.current = callback
+  }, [callback])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
 
   return useCallback(
     ((...args: Parameters<T>) => {
@@ -15,10 +28,10 @@ export function useDebounce<T extends (...args: any[]) => any>(callback: T, dela
       }
 
       timeoutRef.current = setTimeout(() => {
-        callback(...args)
+        callbackRef.current(...args)
       }, delay)
     }) as T,
-    [callback, delay],
+    [delay],
   )
 }
 
@@ -27,30 +40,67 @@ export function useMemoizedCalculation<T>(calculation: () => T, dependencies: Re
   return useMemo(calculation, dependencies)
 }
 
-// Performance monitoring
 export function measurePerformance<T>(name: string, fn: () => T): T {
   if (typeof window !== "undefined" && "performance" in window) {
     const start = performance.now()
+    const memoryBefore = (performance as any).memory?.usedJSHeapSize || 0
+
     const result = fn()
+
     const end = performance.now()
-    console.log(`[Performance] ${name}: ${(end - start).toFixed(2)}ms`)
+    const memoryAfter = (performance as any).memory?.usedJSHeapSize || 0
+    const memoryDiff = memoryAfter - memoryBefore
+
+    console.log(
+      `[Performance] ${name}: ${(end - start).toFixed(2)}ms${memoryDiff ? `, Memory: ${(memoryDiff / 1024 / 1024).toFixed(2)}MB` : ""}`,
+    )
     return result
   }
   return fn()
 }
 
-// Virtual scrolling for large lists
-export function useVirtualScroll(items: any[], itemHeight: number, containerHeight: number) {
+export function useVirtualScroll(items: any[], itemHeight: number, containerHeight: number, overscan = 5) {
+  const [scrollTop, setScrollTop] = useState(0)
+
   return useMemo(() => {
     const visibleCount = Math.ceil(containerHeight / itemHeight)
-    const buffer = Math.floor(visibleCount / 2)
+    const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - overscan)
+    const endIndex = Math.min(items.length, startIndex + visibleCount + overscan * 2)
 
     return {
-      visibleCount: visibleCount + buffer * 2,
-      startIndex: 0,
-      endIndex: Math.min(items.length, visibleCount + buffer * 2),
+      visibleCount,
+      startIndex,
+      endIndex,
+      visibleItems: items.slice(startIndex, endIndex),
+      totalHeight: items.length * itemHeight,
+      offsetY: startIndex * itemHeight,
+      setScrollTop,
     }
-  }, [items.length, itemHeight, containerHeight])
+  }, [items.length, itemHeight, containerHeight, scrollTop, overscan])
+}
+
+export function useThrottledValue<T>(value: T, delay: number): T {
+  const [throttledValue, setThrottledValue] = useState(value)
+  const lastExecuted = useRef(Date.now())
+
+  useEffect(() => {
+    const now = Date.now()
+    const timeSinceLastExecution = now - lastExecuted.current
+
+    if (timeSinceLastExecution >= delay) {
+      setThrottledValue(value)
+      lastExecuted.current = now
+    } else {
+      const timeoutId = setTimeout(() => {
+        setThrottledValue(value)
+        lastExecuted.current = Date.now()
+      }, delay - timeSinceLastExecution)
+
+      return () => clearTimeout(timeoutId)
+    }
+  }, [value, delay])
+
+  return throttledValue
 }
 
 // Image optimization helper
@@ -66,4 +116,42 @@ export function getOptimizedImageProps(src: string, width: number, height: numbe
       `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f3f4f6"/></svg>`,
     ).toString("base64")}`,
   }
+}
+
+export function useBatchedUpdates<T>(initialValue: T, batchDelay = 100) {
+  const [value, setValue] = useState(initialValue)
+  const pendingUpdates = useRef<((prev: T) => T)[]>([])
+  const timeoutRef = useRef<NodeJS.Timeout>()
+
+  const batchedSetValue = useCallback(
+    (updater: (prev: T) => T) => {
+      pendingUpdates.current.push(updater)
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+
+      timeoutRef.current = setTimeout(() => {
+        setValue((prev) => {
+          let result = prev
+          pendingUpdates.current.forEach((update) => {
+            result = update(result)
+          })
+          pendingUpdates.current = []
+          return result
+        })
+      }, batchDelay)
+    },
+    [batchDelay],
+  )
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
+
+  return [value, batchedSetValue] as const
 }

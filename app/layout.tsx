@@ -1,6 +1,5 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
 import { Nunito_Sans } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
@@ -12,12 +11,6 @@ import { PageTransition } from "@/components/page-transition"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/components/auth-provider"
 import { Toaster } from "@/components/ui/toaster"
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-})
 
 const nunitoSans = Nunito_Sans({
   subsets: ["latin"],
@@ -39,7 +32,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${nunitoSans.variable}`} suppressHydrationWarning>
-      <body className={`font-sans ${inter.variable} ${nunitoSans.variable} antialiased`}>
+      <body className={`font-sans ${nunitoSans.variable} antialiased`}>
         <ThemeProvider>
           <AuthProvider>
             <Suspense fallback={null}>

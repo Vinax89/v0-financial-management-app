@@ -1,20 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { getSupabaseServerClient } from "@/lib/supabase/server"
 import { processReceiptWithAI } from "@/lib/ocr-service"
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const supabase = getSupabaseServerClient()
 
-    // Get user from session
+    // Get user from session - RLS will automatically filter by user_id
     const {
       data: { user },
       error: authError,
@@ -30,6 +22,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    if (file.size > maxSize) {
+      return NextResponse.json({ error: "File too large. Maximum size is 10MB." }, { status: 400 })
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+    if (!allowedTypes.includes(file.type)) {
+      return NextResponse.json(
+        { error: "Invalid file type. Only JPEG, PNG, WebP, and PDF are allowed." },
+        { status: 400 },
+      )
+    }
+
     // Convert file to base64 for AI processing
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
@@ -38,7 +43,6 @@ export async function POST(request: NextRequest) {
     // Process receipt with AI
     const receiptData = await processReceiptWithAI(base64, file.type)
 
-    // Store receipt data in database
     const { data: receipt, error: dbError } = await supabase
       .from("receipts")
       .insert({
@@ -62,16 +66,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to save receipt" }, { status: 500 })
     }
 
-    // Create transaction from receipt data
-    if (receiptData.totalAmount && receiptData.merchantName) {
+    if (receiptData.totalAmount && receiptData.merchantName && receiptData.totalAmount > 0) {
       await supabase.from("transactions").insert({
         user_id: user.id,
         amount: -Math.abs(receiptData.totalAmount), // Negative for expense
         description: `Receipt from ${receiptData.merchantName}`,
-        category: receiptData.category || "Other",
-        date: receiptData.date || new Date().toISOString(),
-        receipt_id: receipt.id,
-        type: "expense",
+        transaction_type: "expense",
+        payment_method: "card",
+        merchant: receiptData.merchantName,
+        transaction_date: receiptData.date || new Date().toISOString().split("T")[0],
+        notes: `Auto-generated from receipt upload (${file.name})`,
       })
     }
 

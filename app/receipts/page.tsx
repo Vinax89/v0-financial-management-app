@@ -1,7 +1,7 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect } from "react"
+import React from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,13 +23,112 @@ interface Receipt {
   confidence_score: number | null
 }
 
+const ReceiptItem = React.memo(({ receipt }: { receipt: Receipt }) => {
+  const getStatusColor = useCallback((status: string) => {
+    switch (status) {
+      case "completed":
+        return "bg-green-100 text-green-800"
+      case "processing":
+        return "bg-yellow-100 text-yellow-800"
+      case "failed":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }, [])
+
+  const getStatusIcon = useCallback((status: string) => {
+    switch (status) {
+      case "completed":
+        return <Check className="h-3 w-3" />
+      case "processing":
+        return <Loader2 className="h-3 w-3 animate-spin" />
+      case "failed":
+        return <X className="h-3 w-3" />
+      default:
+        return <FileText className="h-3 w-3" />
+    }
+  }, [])
+
+  const formattedDate = useMemo(() => {
+    const date = receipt.transaction_date || receipt.created_at
+    return new Date(date).toLocaleDateString()
+  }, [receipt.transaction_date, receipt.created_at])
+
+  return (
+    <div className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors">
+      <div className="flex items-center space-x-4">
+        <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center">
+          <FileText className="h-6 w-6 text-muted-foreground" />
+        </div>
+        <div>
+          <p className="font-medium">{receipt.merchant_name || receipt.file_name}</p>
+          <p className="text-sm text-muted-foreground">{formattedDate}</p>
+          {receipt.confidence_score && (
+            <p className="text-xs text-muted-foreground">Confidence: {Math.round(receipt.confidence_score * 100)}%</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-4">
+        <div className="text-right">
+          <p className="font-medium">{receipt.total_amount ? `$${receipt.total_amount.toFixed(2)}` : "—"}</p>
+        </div>
+
+        <Badge className={getStatusColor(receipt.processing_status)}>
+          {getStatusIcon(receipt.processing_status)}
+          <span className="ml-1 capitalize">{receipt.processing_status}</span>
+        </Badge>
+
+        {receipt.items && receipt.items.length > 0 && (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <Eye className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Receipt Details</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium mb-2">Items</h4>
+                  <div className="space-y-2">
+                    {receipt.items.map((item: any, index: number) => (
+                      <div key={index} className="flex justify-between text-sm">
+                        <span>{item.name}</span>
+                        <span>${item.price?.toFixed(2) || "—"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {receipt.total_amount && (
+                  <div className="border-t pt-2">
+                    <div className="flex justify-between font-medium">
+                      <span>Total</span>
+                      <span>${receipt.total_amount.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+    </div>
+  )
+})
+
+ReceiptItem.displayName = "ReceiptItem"
+
 export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const { toast } = useToast()
 
-  const fetchReceipts = async () => {
+  const fetchReceipts = useCallback(async () => {
     try {
       const response = await fetch("/api/receipts")
       if (!response.ok) throw new Error("Failed to fetch receipts")
@@ -46,78 +145,83 @@ export default function ReceiptsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
 
   useEffect(() => {
     fetchReceipts()
-  }, [])
+  }, [fetchReceipts])
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files
-    if (!files || files.length === 0) return
+  const handleFileUpload = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files
+      if (!files || files.length === 0) return
 
-    setUploading(true)
+      setUploading(true)
 
-    try {
-      for (const file of Array.from(files)) {
-        const formData = new FormData()
-        formData.append("file", file)
+      try {
+        const uploadPromises = Array.from(files).map(async (file) => {
+          const formData = new FormData()
+          formData.append("file", file)
 
-        const response = await fetch("/api/receipts/upload", {
-          method: "POST",
-          body: formData,
+          const response = await fetch("/api/receipts/upload", {
+            method: "POST",
+            body: formData,
+          })
+
+          if (!response.ok) {
+            throw new Error(`Failed to upload ${file.name}`)
+          }
+
+          return response.json()
         })
 
-        if (!response.ok) {
-          throw new Error(`Failed to upload ${file.name}`)
+        const results = await Promise.allSettled(uploadPromises)
+
+        let successCount = 0
+        let errorCount = 0
+
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled") {
+            successCount++
+            toast({
+              title: "Success",
+              description: `Receipt processed: ${result.value.extractedData.merchantName || "Unknown merchant"}`,
+            })
+          } else {
+            errorCount++
+            console.error(`Upload failed for file ${index}:`, result.reason)
+          }
+        })
+
+        if (errorCount > 0) {
+          toast({
+            title: "Partial Success",
+            description: `${successCount} receipts processed, ${errorCount} failed`,
+            variant: "destructive",
+          })
         }
 
-        const result = await response.json()
+        // Refresh receipts list
+        await fetchReceipts()
+      } catch (error) {
+        console.error("Upload error:", error)
         toast({
-          title: "Success",
-          description: `Receipt processed: ${result.extractedData.merchantName || "Unknown merchant"}`,
+          title: "Error",
+          description: "Failed to process receipts",
+          variant: "destructive",
         })
+      } finally {
+        setUploading(false)
+        // Reset file input
+        event.target.value = ""
       }
+    },
+    [toast, fetchReceipts],
+  )
 
-      // Refresh receipts list
-      await fetchReceipts()
-    } catch (error) {
-      console.error("Upload error:", error)
-      toast({
-        title: "Error",
-        description: "Failed to process receipt",
-        variant: "destructive",
-      })
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800"
-      case "processing":
-        return "bg-yellow-100 text-yellow-800"
-      case "failed":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <Check className="h-3 w-3" />
-      case "processing":
-        return <Loader2 className="h-3 w-3 animate-spin" />
-      case "failed":
-        return <X className="h-3 w-3" />
-      default:
-        return <FileText className="h-3 w-3" />
-    }
-  }
+  const receiptList = useMemo(() => {
+    return receipts.map((receipt) => <ReceiptItem key={receipt.id} receipt={receipt} />)
+  }, [receipts])
 
   if (loading) {
     return (
@@ -189,82 +293,7 @@ export default function ReceiptsPage() {
               <p className="text-sm">Upload your first receipt to get started</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {receipts.map((receipt) => (
-                <div
-                  key={receipt.id}
-                  className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center">
-                      <FileText className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="font-medium">{receipt.merchant_name || receipt.file_name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {receipt.transaction_date
-                          ? new Date(receipt.transaction_date).toLocaleDateString()
-                          : new Date(receipt.created_at).toLocaleDateString()}
-                      </p>
-                      {receipt.confidence_score && (
-                        <p className="text-xs text-muted-foreground">
-                          Confidence: {Math.round(receipt.confidence_score * 100)}%
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-4">
-                    <div className="text-right">
-                      <p className="font-medium">
-                        {receipt.total_amount ? `$${receipt.total_amount.toFixed(2)}` : "—"}
-                      </p>
-                    </div>
-
-                    <Badge className={getStatusColor(receipt.processing_status)}>
-                      {getStatusIcon(receipt.processing_status)}
-                      <span className="ml-1 capitalize">{receipt.processing_status}</span>
-                    </Badge>
-
-                    {receipt.items && receipt.items.length > 0 && (
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Receipt Details</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <h4 className="font-medium mb-2">Items</h4>
-                              <div className="space-y-2">
-                                {receipt.items.map((item: any, index: number) => (
-                                  <div key={index} className="flex justify-between text-sm">
-                                    <span>{item.name}</span>
-                                    <span>${item.price?.toFixed(2) || "—"}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                            {receipt.total_amount && (
-                              <div className="border-t pt-2">
-                                <div className="flex justify-between font-medium">
-                                  <span>Total</span>
-                                  <span>${receipt.total_amount.toFixed(2)}</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <div className="space-y-4">{receiptList}</div>
           )}
         </CardContent>
       </Card>
