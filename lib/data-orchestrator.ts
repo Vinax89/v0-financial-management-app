@@ -1,5 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server"
 
+type SupabaseClient = ReturnType<typeof createServerClient>
+
 export interface DataSource {
   id: string
   name: string
@@ -29,11 +31,14 @@ export interface ValidationRule {
 }
 
 export class DataOrchestrator {
-  private supabase = createServerClient()
+  private createSupabaseClient(): SupabaseClient {
+    return createServerClient()
+  }
 
   // Data Source Management
   async registerDataSource(source: Omit<DataSource, "id">): Promise<string> {
-    const { data, error } = await this.supabase
+    const supabase = this.createSupabaseClient()
+    const { data, error } = await supabase
       .from("data_sources")
       .insert([
         {
@@ -51,7 +56,8 @@ export class DataOrchestrator {
   }
 
   async getDataSources(): Promise<DataSource[]> {
-    const { data, error } = await this.supabase
+    const supabase = this.createSupabaseClient()
+    const { data, error } = await supabase
       .from("data_sources")
       .select("*")
       .order("created_at", { ascending: false })
@@ -62,7 +68,8 @@ export class DataOrchestrator {
 
   // Job Processing
   async createProcessingJob(job: Omit<ProcessingJob, "id" | "status">): Promise<string> {
-    const { data, error } = await this.supabase
+    const supabase = this.createSupabaseClient()
+    const { data, error } = await supabase
       .from("data_processing_jobs")
       .insert([
         {
@@ -84,9 +91,10 @@ export class DataOrchestrator {
   }
 
   async processJob(jobId: string): Promise<void> {
+    const supabase = this.createSupabaseClient()
     try {
       // Update job status to processing
-      await this.supabase
+      await supabase
         .from("data_processing_jobs")
         .update({
           status: "processing",
@@ -95,7 +103,7 @@ export class DataOrchestrator {
         .eq("id", jobId)
 
       // Get job details
-      const { data: job, error } = await this.supabase
+      const { data: job, error } = await supabase
         .from("data_processing_jobs")
         .select("*, data_sources(*)")
         .eq("id", jobId)
@@ -108,21 +116,21 @@ export class DataOrchestrator {
       // Process based on job type
       switch (job.job_type) {
         case "import":
-          result = await this.processImport(job)
+          result = await this.processImport(job, supabase)
           break
         case "categorize":
-          result = await this.processCategoriztion(job)
+          result = await this.processCategoriztion(job, supabase)
           break
         case "validate":
-          result = await this.processValidation(job)
+          result = await this.processValidation(job, supabase)
           break
         case "reconcile":
-          result = await this.processReconciliation(job)
+          result = await this.processReconciliation(job, supabase)
           break
       }
 
       // Update job as completed
-      await this.supabase
+      await supabase
         .from("data_processing_jobs")
         .update({
           status: "completed",
@@ -132,7 +140,7 @@ export class DataOrchestrator {
         .eq("id", jobId)
     } catch (error) {
       // Update job as failed
-      await this.supabase
+      await supabase
         .from("data_processing_jobs")
         .update({
           status: "failed",
@@ -148,12 +156,12 @@ export class DataOrchestrator {
         title: "Job Processing Failed",
         description: `Job ${jobId} failed: ${error instanceof Error ? error.message : "Unknown error"}`,
         sourceReference: jobId,
-      })
+      }, supabase)
     }
   }
 
   // Processing Methods
-  private async processImport(job: any): Promise<Record<string, any>> {
+  private async processImport(job: any, supabase: SupabaseClient): Promise<Record<string, any>> {
     const { input_data } = job
     const transactions = input_data.transactions || []
 
@@ -164,10 +172,10 @@ export class DataOrchestrator {
       const validatedTransaction = await this.validateTransaction(transaction)
 
       // Auto-categorize
-      const categorizedTransaction = await this.categorizeTransaction(validatedTransaction)
+      const categorizedTransaction = await this.categorizeTransaction(validatedTransaction, supabase)
 
       // Check for duplicates
-      const isDuplicate = await this.checkDuplicate(categorizedTransaction)
+      const isDuplicate = await this.checkDuplicate(categorizedTransaction, supabase)
 
       if (!isDuplicate) {
         processedTransactions.push(categorizedTransaction)
@@ -181,12 +189,12 @@ export class DataOrchestrator {
     }
   }
 
-  private async processCategoriztion(job: any): Promise<Record<string, any>> {
+  private async processCategoriztion(job: any, supabase: SupabaseClient): Promise<Record<string, any>> {
     const { input_data } = job
     const transactionId = input_data.transactionId
 
     // Get transaction
-    const { data: transaction, error } = await this.supabase
+    const { data: transaction, error } = await supabase
       .from("transactions")
       .select("*")
       .eq("id", transactionId)
@@ -195,7 +203,7 @@ export class DataOrchestrator {
     if (error) throw new Error(`Transaction not found: ${error.message}`)
 
     // Get categories with keywords and patterns
-    const { data: categories } = await this.supabase.from("transaction_categories").select("*").eq("is_system", true)
+    const { data: categories } = await supabase.from("transaction_categories").select("*").eq("is_system", true)
 
     const suggestedCategory = await this.suggestCategory(transaction, categories || [])
 
@@ -206,12 +214,12 @@ export class DataOrchestrator {
     }
   }
 
-  private async processValidation(job: any): Promise<Record<string, any>> {
+  private async processValidation(job: any, supabase: SupabaseClient): Promise<Record<string, any>> {
     const { input_data } = job
     const data = input_data.data
 
     // Get validation rules
-    const { data: rules } = await this.supabase.from("data_validation_rules").select("*").eq("is_active", true)
+    const { data: rules } = await supabase.from("data_validation_rules").select("*").eq("is_active", true)
 
     const validationResults = []
 
@@ -227,13 +235,13 @@ export class DataOrchestrator {
     }
   }
 
-  private async processReconciliation(job: any): Promise<Record<string, any>> {
+  private async processReconciliation(job: any, supabase: SupabaseClient): Promise<Record<string, any>> {
     const { input_data } = job
     const accountId = input_data.accountId
     const period = input_data.period || "current_month"
 
     // Get account transactions for period
-    const { data: transactions } = await this.supabase
+    const { data: transactions } = await supabase
       .from("transactions")
       .select("*")
       .eq("account_id", accountId)
@@ -280,8 +288,8 @@ export class DataOrchestrator {
     }
   }
 
-  private async categorizeTransaction(transaction: any): Promise<any> {
-    const { data: categories } = await this.supabase.from("transaction_categories").select("*")
+  private async categorizeTransaction(transaction: any, supabase: SupabaseClient): Promise<any> {
+    const { data: categories } = await supabase.from("transaction_categories").select("*")
 
     const suggestedCategory = await this.suggestCategory(transaction, categories || [])
 
@@ -340,8 +348,8 @@ export class DataOrchestrator {
     return bestMatch
   }
 
-  private async checkDuplicate(transaction: any): Promise<boolean> {
-    const { data: existing } = await this.supabase
+  private async checkDuplicate(transaction: any, supabase: SupabaseClient): Promise<boolean> {
+    const { data: existing } = await supabase
       .from("transactions")
       .select("id")
       .eq("amount", transaction.amount)
@@ -405,8 +413,9 @@ export class DataOrchestrator {
     title: string
     description?: string
     sourceReference?: string
-  }): Promise<void> {
-    await this.supabase.from("watchdog_alerts").insert([
+  }, supabaseClient?: SupabaseClient): Promise<void> {
+    const supabase = supabaseClient ?? this.createSupabaseClient()
+    await supabase.from("watchdog_alerts").insert([
       {
         alert_type: alert.alertType,
         severity: alert.severity,
@@ -418,7 +427,8 @@ export class DataOrchestrator {
   }
 
   async getActiveAlerts(): Promise<any[]> {
-    const { data, error } = await this.supabase
+    const supabase = this.createSupabaseClient()
+    const { data, error } = await supabase
       .from("watchdog_alerts")
       .select("*")
       .eq("is_resolved", false)

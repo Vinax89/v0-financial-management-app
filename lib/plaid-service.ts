@@ -11,9 +11,12 @@ import type {
   ItemRemoveRequest,
 } from "plaid"
 
+type SupabaseClient = Awaited<ReturnType<typeof getSupabaseServerClient>>
+
 export class PlaidService {
-  private supabasePromise = getSupabaseServerClient()
-  private async supabase() { return await this.supabasePromise }
+  private getSupabaseClient(): Promise<SupabaseClient> {
+    return getSupabaseServerClient()
+  }
 
   // Create Link Token for Plaid Link
   async createLinkToken(userId: string): Promise<string> {
@@ -55,7 +58,8 @@ export class PlaidService {
       const encrypted_access_token = encryptToString(access_token)
 
       // Store the item in database
-      const { data: plaidItem, error } = await (await this.supabase())
+      const supabase = await this.getSupabaseClient()
+      const { data: plaidItem, error } = await supabase
         .from("plaid_items")
         .insert([
           {
@@ -77,10 +81,10 @@ export class PlaidService {
       if (error) throw error
 
       // Fetch and store accounts
-      await this.syncAccounts(access_token, plaidItem.id)
+      await this.syncAccounts(access_token, plaidItem.id, supabase)
 
       // Initial transaction sync
-      await this.syncTransactions(access_token, plaidItem.id)
+      await this.syncTransactions(access_token, plaidItem.id, supabase)
 
       return item_id
     } catch (error) {
@@ -90,7 +94,11 @@ export class PlaidService {
   }
 
   // Sync accounts from Plaid
-  async syncAccounts(accessToken: string, plaidItemId: string): Promise<void> {
+  async syncAccounts(
+    accessToken: string,
+    plaidItemId: string,
+    supabaseClient?: SupabaseClient,
+  ): Promise<void> {
     try {
       const request: AccountsGetRequest = {
         access_token: accessToken,
@@ -98,6 +106,8 @@ export class PlaidService {
 
       const response = await plaidClient.accountsGet(request)
       const accounts = response.data.accounts
+
+      const supabase = supabaseClient ?? (await this.getSupabaseClient())
 
       for (const account of accounts) {
         const accountData = {
@@ -117,7 +127,7 @@ export class PlaidService {
           last_balance_update: new Date().toISOString(),
         }
 
-        await (await this.supabase()).from("plaid_accounts").upsert(accountData, {
+        await supabase.from("plaid_accounts").upsert(accountData, {
           onConflict: "plaid_item_id,account_id",
         })
       }
@@ -128,10 +138,15 @@ export class PlaidService {
   }
 
   // Sync transactions from Plaid
-  async syncTransactions(accessToken: string, plaidItemId: string): Promise<void> {
+  async syncTransactions(
+    accessToken: string,
+    plaidItemId: string,
+    supabaseClient?: SupabaseClient,
+  ): Promise<void> {
     try {
+      const supabase = supabaseClient ?? (await this.getSupabaseClient())
       // Check if we have a cursor for incremental sync
-      const { data: syncCursor } = await (await this.supabase())
+      const { data: syncCursor } = await supabase
         .from("plaid_sync_cursors")
         .select("cursor")
         .eq("plaid_item_id", plaidItemId)
@@ -139,10 +154,10 @@ export class PlaidService {
 
       if (syncCursor?.cursor) {
         // Use incremental sync
-        await this.incrementalTransactionSync(accessToken, plaidItemId, syncCursor.cursor)
+        await this.incrementalTransactionSync(accessToken, plaidItemId, syncCursor.cursor, supabase)
       } else {
         // Initial full sync
-        await this.fullTransactionSync(accessToken, plaidItemId)
+        await this.fullTransactionSync(accessToken, plaidItemId, supabase)
       }
     } catch (error) {
       console.error("Failed to sync transactions:", error)
@@ -165,7 +180,12 @@ export class PlaidService {
   }
 
   // Full transaction sync (initial sync)
-  private async fullTransactionSync(accessToken: string, plaidItemId: string): Promise<void> {
+  private async fullTransactionSync(
+    accessToken: string,
+    plaidItemId: string,
+    supabaseClient?: SupabaseClient,
+  ): Promise<void> {
+    const supabase = supabaseClient ?? (await this.getSupabaseClient())
     const startDate = new Date()
     startDate.setFullYear(startDate.getFullYear() - 2) // Get 2 years of history
 
@@ -188,7 +208,7 @@ export class PlaidService {
 
       if (transactions.length === 0) break
 
-      await this.storeTransactions(transactions, plaidItemId)
+      await this.storeTransactions(transactions, plaidItemId, supabase)
 
       offset += transactions.length
 
@@ -198,7 +218,13 @@ export class PlaidService {
   }
 
   // Incremental transaction sync using cursors
-  private async incrementalTransactionSync(accessToken: string, plaidItemId: string, cursor: string): Promise<void> {
+  private async incrementalTransactionSync(
+    accessToken: string,
+    plaidItemId: string,
+    cursor: string,
+    supabaseClient?: SupabaseClient,
+  ): Promise<void> {
+    const supabase = supabaseClient ?? (await this.getSupabaseClient())
     let nextCursor = cursor
 
     while (nextCursor) {
@@ -213,20 +239,20 @@ export class PlaidService {
 
       // Store new and modified transactions
       if (added.length > 0) {
-        await this.storeTransactions(added, plaidItemId)
+        await this.storeTransactions(added, plaidItemId, supabase)
       }
 
       if (modified.length > 0) {
-        await this.storeTransactions(modified, plaidItemId)
+        await this.storeTransactions(modified, plaidItemId, supabase)
       }
 
       // Handle removed transactions
       if (removed.length > 0) {
-        await this.removeTransactions(removed.map((r) => r.transaction_id))
+        await this.removeTransactions(removed.map((r) => r.transaction_id), supabase)
       }
 
       // Update cursor
-      await (await this.supabase()).from("plaid_sync_cursors").upsert({
+      await supabase.from("plaid_sync_cursors").upsert({
         plaid_item_id: plaidItemId,
         cursor: next_cursor,
         last_sync: new Date().toISOString(),
@@ -237,9 +263,14 @@ export class PlaidService {
   }
 
   // Store transactions in database
-  private async storeTransactions(transactions: any[], plaidItemId: string): Promise<void> {
+  private async storeTransactions(
+    transactions: any[],
+    plaidItemId: string,
+    supabaseClient?: SupabaseClient,
+  ): Promise<void> {
+    const supabase = supabaseClient ?? (await this.getSupabaseClient())
     // Get account mappings
-    const { data: accounts } = await (await this.supabase())
+    const { data: accounts } = await supabase
       .from("plaid_accounts")
       .select("id, account_id")
       .eq("plaid_item_id", plaidItemId)
@@ -289,28 +320,33 @@ export class PlaidService {
       personal_finance_category_confidence_level: transaction.personal_finance_category?.confidence_level,
     }))
 
-    await (await this.supabase()).from("plaid_transactions").upsert(transactionData, {
+    await supabase.from("plaid_transactions").upsert(transactionData, {
       onConflict: "transaction_id",
     })
 
     // Sync to main transactions table
-    await this.syncToMainTransactions(transactionData)
+    await this.syncToMainTransactions(transactionData, supabase)
   }
 
   // Remove transactions
-  private async removeTransactions(transactionIds: string[]): Promise<void> {
-    await (await this.supabase()).from("plaid_transactions").delete().in("transaction_id", transactionIds)
+  private async removeTransactions(transactionIds: string[], supabaseClient?: SupabaseClient): Promise<void> {
+    const supabase = supabaseClient ?? (await this.getSupabaseClient())
+    await supabase.from("plaid_transactions").delete().in("transaction_id", transactionIds)
   }
 
   // Sync Plaid transactions to main transactions table
-  private async syncToMainTransactions(plaidTransactions: any[]): Promise<void> {
+  private async syncToMainTransactions(
+    plaidTransactions: any[],
+    supabaseClient?: SupabaseClient,
+  ): Promise<void> {
+    const supabase = supabaseClient ?? (await this.getSupabaseClient())
     for (const plaidTx of plaidTransactions) {
       // Skip if already synced
       if (plaidTx.is_synced_to_transactions) continue
 
       try {
         // Get account info
-        const { data: account } = await (await this.supabase())
+        const { data: account } = await supabase
           .from("plaid_accounts")
           .select("name, type, subtype")
           .eq("id", plaidTx.plaid_account_id)
@@ -341,7 +377,7 @@ export class PlaidService {
         }
 
         // Insert into main transactions table
-        const { data: insertedTx, error } = await (await this.supabase())
+        const { data: insertedTx, error } = await supabase
           .from("transactions")
           .insert([mainTransaction])
           .select()
@@ -350,7 +386,7 @@ export class PlaidService {
         if (error) throw error
 
         // Update Plaid transaction as synced
-        await (await this.supabase())
+        await supabase
           .from("plaid_transactions")
           .update({
             is_synced_to_transactions: true,
@@ -361,7 +397,7 @@ export class PlaidService {
         console.error(`Failed to sync transaction ${plaidTx.transaction_id}:`, error)
 
         // Log sync error
-        await (await this.supabase())
+        await supabase
           .from("plaid_transactions")
           .update({
             sync_error: error instanceof Error ? error.message : "Unknown sync error",
@@ -404,11 +440,12 @@ export class PlaidService {
 
   // Get connected accounts for a user
   async getConnectedAccounts(userId: string): Promise<any[]> {
-    const { data, error } = await (await this.supabase())
+    const supabase = await this.getSupabaseClient()
+    const { data, error } = await supabase
       .from("plaid_items")
       .select(`
         *,
-        plaid_accounts ( 
+        plaid_accounts (
           *
         )
       `)
@@ -422,8 +459,9 @@ export class PlaidService {
   // Remove Plaid item (disconnect bank)
   async removeItem(itemId: string, userId: string): Promise<void> {
     try {
+      const supabase = await this.getSupabaseClient()
       // Get access token
-      const { data: plaidItem } = await (await this.supabase())
+      const { data: plaidItem } = await supabase
         .from("plaid_items")
         .select("access_token")
         .eq("item_id", itemId)
@@ -442,7 +480,7 @@ export class PlaidService {
       await plaidClient.itemRemove(request)
 
       // Remove from database (cascade will handle related records)
-      await (await this.supabase()).from("plaid_items").delete().eq("item_id", itemId).eq("user_id", userId)
+      await supabase.from("plaid_items").delete().eq("item_id", itemId).eq("user_id", userId)
     } catch (error) {
       console.error("Failed to remove Plaid item:", error)
       throw new Error("Failed to disconnect bank account")
@@ -452,8 +490,9 @@ export class PlaidService {
   // Handle webhook
   async handleWebhook(webhookType: string, webhookCode: string, payload: any): Promise<void> {
     try {
+      const supabase = await this.getSupabaseClient()
       // Log webhook
-      await (await this.supabase()).from("plaid_webhooks").insert([
+      await supabase.from("plaid_webhooks").insert([
         {
           webhook_type: webhookType,
           webhook_code: webhookCode,
@@ -469,20 +508,20 @@ export class PlaidService {
       // Handle different webhook types
       switch (webhookType) {
         case "TRANSACTIONS":
-          await this.handleTransactionsWebhook(webhookCode, payload)
+          await this.handleTransactionsWebhook(webhookCode, payload, supabase)
           break
         case "ITEM":
-          await this.handleItemWebhook(webhookCode, payload)
+          await this.handleItemWebhook(webhookCode, payload, supabase)
           break
         case "ACCOUNTS":
-          await this.handleAccountsWebhook(webhookCode, payload)
+          await this.handleAccountsWebhook(webhookCode, payload, supabase)
           break
         default:
           console.log(`Unhandled webhook type: ${webhookType}`)
       }
 
       // Mark webhook as processed
-      await (await this.supabase())
+      await supabase
         .from("plaid_webhooks")
         .update({ processed: true, processed_at: new Date().toISOString() })
         .eq("item_id", payload.item_id)
@@ -494,11 +533,16 @@ export class PlaidService {
   }
 
   // Handle transaction webhooks
-  private async handleTransactionsWebhook(webhookCode: string, payload: any): Promise<void> {
+  private async handleTransactionsWebhook(
+    webhookCode: string,
+    payload: any,
+    supabaseClient?: SupabaseClient,
+  ): Promise<void> {
+    const supabase = supabaseClient ?? (await this.getSupabaseClient())
     const { item_id } = payload
 
     // Get Plaid item
-    const { data: plaidItem } = await (await this.supabase())
+    const { data: plaidItem } = await supabase
       .from("plaid_items")
       .select("id, access_token")
       .eq("item_id", item_id)
@@ -513,11 +557,11 @@ export class PlaidService {
       case "DEFAULT_UPDATE":
       case "INITIAL_UPDATE":
         // Sync transactions
-        await this.syncTransactions(accessToken, plaidItem.id)
+        await this.syncTransactions(accessToken, plaidItem.id, supabase)
         break
       case "HISTORICAL_UPDATE":
         // Full historical sync
-        await this.fullTransactionSync(accessToken, plaidItem.id)
+        await this.fullTransactionSync(accessToken, plaidItem.id, supabase)
         break
       default:
         console.log(`Unhandled transaction webhook code: ${webhookCode}`)
@@ -525,13 +569,18 @@ export class PlaidService {
   }
 
   // Handle item webhooks
-  private async handleItemWebhook(webhookCode: string, payload: any): Promise<void> {
+  private async handleItemWebhook(
+    webhookCode: string,
+    payload: any,
+    supabaseClient?: SupabaseClient,
+  ): Promise<void> {
+    const supabase = supabaseClient ?? (await this.getSupabaseClient())
     const { item_id, error } = payload
 
     switch (webhookCode) {
       case "ERROR":
         // Update item status
-        await (await this.supabase())
+        await supabase
           .from("plaid_items")
           .update({
             status: "error",
@@ -542,7 +591,7 @@ export class PlaidService {
         break
       case "PENDING_EXPIRATION":
         // Update item status
-        await (await this.supabase())
+        await supabase
           .from("plaid_items")
           .update({
             status: "requires_update",
@@ -556,11 +605,16 @@ export class PlaidService {
   }
 
   // Handle account webhooks
-  private async handleAccountsWebhook(webhookCode: string, payload: any): Promise<void> {
+  private async handleAccountsWebhook(
+    webhookCode: string,
+    payload: any,
+    supabaseClient?: SupabaseClient,
+  ): Promise<void> {
+    const supabase = supabaseClient ?? (await this.getSupabaseClient())
     const { item_id } = payload
 
     // Get Plaid item
-    const { data: plaidItem } = await (await this.supabase())
+    const { data: plaidItem } = await supabase
       .from("plaid_items")
       .select("id, access_token")
       .eq("item_id", item_id)
@@ -573,7 +627,7 @@ export class PlaidService {
     switch (webhookCode) {
       case "DEFAULT_UPDATE":
         // Sync accounts
-        await this.syncAccounts(accessToken, plaidItem.id)
+        await this.syncAccounts(accessToken, plaidItem.id, supabase)
         break
       default:
         console.log(`Unhandled accounts webhook code: ${webhookCode}`)
