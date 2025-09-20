@@ -1,3 +1,4 @@
+// instrumentation.ts
 import * as Sentry from '@sentry/nextjs'
 
 let inited = false
