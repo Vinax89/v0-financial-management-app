@@ -37,7 +37,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
       </div>
       <div className="overflow-x-auto border rounded">
         <table className="min-w-full text-sm">
-          <thead><tr><th className="p-2">Date</th><th className="p-2">Name</th><th className.p-2">Merchant</th><th className="p-2 text-right">Amount</th><th className="p-2">Category</th></tr></thead>
+          <thead><tr><th className="p-2">Date</th><th className="p-2">Name</th><th className="p-2">Merchant</th><th className="p-2 text-right">Amount</th><th className="p-2">Category</th></tr></thead>
           <tbody>
             {(data||[]).map((r:any) => (
               <tr key={r.id} className="border-t">

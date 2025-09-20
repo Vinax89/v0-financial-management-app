@@ -83,7 +83,7 @@ export const AppHeader = React.memo(function AppHeader() {
               <DropdownMenuItem>
                 <div className="flex flex-col gap-1">
                   <p className="text-sm font-medium">Budget Alert</p>
-                  <p className="text-xs text-muted-foreground">You've spent 85% of your dining budget this period</p>
+                  <p className="text-xs text-muted-foreground">You’ve spent 85% of your dining budget this period</p>
                 </div>
               </DropdownMenuItem>
               <DropdownMenuItem>
