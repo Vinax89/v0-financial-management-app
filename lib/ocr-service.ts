@@ -1,6 +1,8 @@
 import { createServerClient } from "./supabase/server"
 import { dataOrchestrator } from "./data-orchestrator"
 
+type SupabaseClient = ReturnType<typeof createServerClient>
+
 export interface ReceiptData {
   id: string
   fileName: string
@@ -37,13 +39,16 @@ export interface LineItem {
 }
 
 export class OCRService {
-  private supabase = createServerClient()
+  private createSupabaseClient(): SupabaseClient {
+    return createServerClient()
+  }
 
   // Upload and process receipt
   async uploadReceipt(userId: string, file: File, fileUrl: string): Promise<string> {
+    const supabase = this.createSupabaseClient()
     try {
       // Store receipt record
-      const { data: receipt, error } = await this.supabase
+      const { data: receipt, error } = await supabase
         .from("receipts")
         .insert([
           {
@@ -61,7 +66,7 @@ export class OCRService {
       if (error) throw error
 
       // Queue OCR processing job
-      await this.queueOCRJob(receipt.id, "ocr_extract")
+      await this.queueOCRJob(receipt.id, "ocr_extract", 5, supabase)
 
       return receipt.id
     } catch (error) {
@@ -75,8 +80,10 @@ export class OCRService {
     receiptId: string,
     jobType: "ocr_extract" | "data_parse" | "categorize",
     priority = 5,
+    supabaseClient?: SupabaseClient,
   ): Promise<void> {
-    await this.supabase.from("ocr_processing_jobs").insert([
+    const supabase = supabaseClient ?? this.createSupabaseClient()
+    await supabase.from("ocr_processing_jobs").insert([
       {
         receipt_id: receiptId,
         job_type: jobType,
@@ -93,9 +100,10 @@ export class OCRService {
 
   // Process OCR job
   async processOCRJob(receiptId: string): Promise<void> {
+    const supabase = this.createSupabaseClient()
     try {
       // Update receipt status
-      await this.supabase
+      await supabase
         .from("receipts")
         .update({
           status: "processing",
@@ -104,7 +112,7 @@ export class OCRService {
         .eq("id", receiptId)
 
       // Get receipt data
-      const { data: receipt, error } = await this.supabase.from("receipts").select("*").eq("id", receiptId).single()
+      const { data: receipt, error } = await supabase.from("receipts").select("*").eq("id", receiptId).single()
 
       if (error) throw error
 
@@ -112,7 +120,7 @@ export class OCRService {
       const extractedData = await this.extractReceiptData(receipt.file_url)
 
       // Store extracted data
-      await this.supabase
+      await supabase
         .from("receipts")
         .update({
           status: "completed",
@@ -147,16 +155,16 @@ export class OCRService {
           confidence_score: item.confidence || extractedData.confidence,
         }))
 
-        await this.supabase.from("receipt_line_items").insert(lineItemsData)
+        await supabase.from("receipt_line_items").insert(lineItemsData)
       }
 
       // Create transaction from receipt
-      await this.createTransactionFromReceipt(receiptId, extractedData)
+      await this.createTransactionFromReceipt(receiptId, extractedData, supabase)
     } catch (error) {
       console.error("OCR processing failed:", error)
 
       // Update receipt status as failed
-      await this.supabase
+      await supabase
         .from("receipts")
         .update({
           status: "failed",
@@ -288,7 +296,12 @@ export class OCRService {
   }
 
   // Create transaction from receipt data
-  private async createTransactionFromReceipt(receiptId: string, extractedData: any): Promise<void> {
+  private async createTransactionFromReceipt(
+    receiptId: string,
+    extractedData: any,
+    supabaseClient?: SupabaseClient,
+  ): Promise<void> {
+    const supabase = supabaseClient ?? this.createSupabaseClient()
     try {
       const transactionData = {
         amount: -(extractedData.totalAmount || 0), // Negative for expenses
@@ -309,7 +322,7 @@ export class OCRService {
         },
       }
 
-      const { data: transaction, error } = await this.supabase
+      const { data: transaction, error } = await supabase
         .from("transactions")
         .insert([transactionData])
         .select()
@@ -318,7 +331,7 @@ export class OCRService {
       if (error) throw error
 
       // Update receipt with transaction reference
-      await this.supabase
+      await supabase
         .from("receipts")
         .update({
           is_synced_to_transactions: true,
@@ -329,7 +342,7 @@ export class OCRService {
       console.error("Failed to create transaction from receipt:", error)
 
       // Log sync error
-      await this.supabase
+      await supabase
         .from("receipts")
         .update({
           sync_error: error instanceof Error ? error.message : "Unknown sync error",
@@ -340,7 +353,8 @@ export class OCRService {
 
   // Get user receipts
   async getUserReceipts(userId: string, limit = 50): Promise<ReceiptData[]> {
-    const { data, error } = await this.supabase
+    const supabase = this.createSupabaseClient()
+    const { data, error } = await supabase
       .from("receipts")
       .select(`
         *,
@@ -357,7 +371,8 @@ export class OCRService {
 
   // Get receipt by ID
   async getReceipt(receiptId: string, userId: string): Promise<ReceiptData | null> {
-    const { data, error } = await this.supabase
+    const supabase = this.createSupabaseClient()
+    const { data, error } = await supabase
       .from("receipts")
       .select(`
         *,
@@ -374,8 +389,9 @@ export class OCRService {
 
   // Update receipt data (user corrections)
   async updateReceiptData(receiptId: string, userId: string, updates: Partial<ExtractedReceiptData>): Promise<void> {
+    const supabase = this.createSupabaseClient()
     // Store user corrections
-    const { error } = await this.supabase
+    const { error } = await supabase
       .from("receipts")
       .update({
         merchant_name: updates.merchantName,
@@ -391,12 +407,17 @@ export class OCRService {
     if (error) throw error
 
     // Update associated transaction
-    await this.updateAssociatedTransaction(receiptId, updates)
+    await this.updateAssociatedTransaction(receiptId, updates, supabase)
   }
 
   // Update associated transaction
-  private async updateAssociatedTransaction(receiptId: string, updates: Partial<ExtractedReceiptData>): Promise<void> {
-    const { data: receipt } = await this.supabase.from("receipts").select("transaction_id").eq("id", receiptId).single()
+  private async updateAssociatedTransaction(
+    receiptId: string,
+    updates: Partial<ExtractedReceiptData>,
+    supabaseClient?: SupabaseClient,
+  ): Promise<void> {
+    const supabase = supabaseClient ?? this.createSupabaseClient()
+    const { data: receipt } = await supabase.from("receipts").select("transaction_id").eq("id", receiptId).single()
 
     if (!receipt?.transaction_id) return
 
@@ -420,7 +441,7 @@ export class OCRService {
     }
 
     if (Object.keys(transactionUpdates).length > 0) {
-      await this.supabase.from("transactions").update(transactionUpdates).eq("id", receipt.transaction_id)
+      await supabase.from("transactions").update(transactionUpdates).eq("id", receipt.transaction_id)
     }
   }
 
@@ -437,7 +458,8 @@ export class OCRService {
       comments?: string
     },
   ): Promise<void> {
-    await this.supabase.from("receipt_feedback").insert([
+    const supabase = this.createSupabaseClient()
+    await supabase.from("receipt_feedback").insert([
       {
         receipt_id: receiptId,
         user_id: userId,
@@ -453,7 +475,8 @@ export class OCRService {
 
   // Get processing statistics
   async getProcessingStats(userId: string): Promise<any> {
-    const { data: stats } = await this.supabase
+    const supabase = this.createSupabaseClient()
+    const { data: stats } = await supabase
       .from("receipts")
       .select("status, confidence_score, created_at")
       .eq("user_id", userId)
