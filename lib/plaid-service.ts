@@ -150,6 +150,20 @@ export class PlaidService {
     }
   }
 
+  async syncItemTransactionsByItemId(itemId: string): Promise<void> {
+    const { data: plaidItem } = await (await this.supabase())
+      .from("plaid_items")
+      .select("id, access_token")
+      .eq("item_id", itemId)
+      .single()
+
+    if (!plaidItem) return
+
+    const accessToken = decryptFromString(plaidItem.access_token)
+
+    await this.syncTransactions(accessToken, plaidItem.id)
+  }
+
   // Full transaction sync (initial sync)
   private async fullTransactionSync(accessToken: string, plaidItemId: string): Promise<void> {
     const startDate = new Date()
