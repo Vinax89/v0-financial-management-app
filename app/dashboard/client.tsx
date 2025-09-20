@@ -299,7 +299,7 @@ export default function DashboardClient({ stats }: { stats: { cached: number; hi
                     <div>
                       <p className="font-medium text-yellow-800">Dining Out Alert</p>
                       <p className="text-sm text-yellow-700">
-                        You've spent 23% more on dining out this month compared to your average.
+                        You’ve spent 23% more on dining out this month compared to your average.
                       </p>
                     </div>
                   </div>

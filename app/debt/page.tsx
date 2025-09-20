@@ -428,7 +428,7 @@ export default function DebtManagementPage() {
                       <div>
                         <p className="font-medium text-green-800">Great Progress!</p>
                         <p className="text-sm text-green-700 mt-1">
-                          You've reduced your total debt by $2,340 this year. Keep up the momentum!
+                          You’ve reduced your total debt by $2,340 this year. Keep up the momentum!
                         </p>
                       </div>
                     </div>
